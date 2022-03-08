@@ -1,0 +1,56 @@
+# Parameters about the engine
+pars:
+    db_filepath: results.sqlite
+    n_games_in_parallel: 3 # to guarantee that time controll is acurate, do not use more than half the number of available cpu's.
+    verbose: True         # If True, output of players and alice also shown
+
+# Gamemodi. Do not alter the numbers of small, medium, large, universal. You can add new modi if you like. Just give them a new names
+gamemodi:
+    small:
+        codelength: 5
+        n_colors: 8
+        main_time: 10
+        time_increment: 0
+        max_n_moves: 15
+    medium:
+        codelength: 8
+        n_colors: 13
+        main_time: 20
+        time_increment: 1
+        max_n_moves: 30
+    large:
+        codelength: 10
+        n_colors: 16
+        main_time: 30
+        time_increment: 3
+        max_n_moves: 60
+    # This following game modus was added later.
+    # It has a search space of ~10^83, which is of the order of the number of atoms in the visible universe. 
+    # Therefore the name. Not sure if we will solve that. Let's see.
+    # Note: The real number of combinations is "just" 2^32 because numpy seed of Alice has 32 bit.
+    # Nevertheless, the accessible combinations of secret codes are "dense" in the 10^83.
+    # So if we do not cheat, the problem is indeed universal.
+    universal:
+        codelength: 45
+        n_colors: 72
+        main_time: 600
+        time_increment: 10 # meaning max 1h per game.
+        max_n_moves: 300
+
+
+# Tounament definition. Define who is playeing, which game modus, how many repetitions...
+tournament_sections:
+    - title: starting_small
+      gamemodus: small
+      players: [heuristics_003]
+      n_games: 300 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
+      salt: non-deterministic # use another string (different from 'non-deterministic') to get a deterministic run. At competition day, we will do that for reproducibility of the results.
+
+    # a tournament can contain many tournament sections. They will be played in listed order. 
+    - title: medium_complexity
+      gamemodus: medium
+      players: [heuristics_002] # not all three players participating now
+      n_games: 0
+      salt: non-deterministic
+
+    # more section to be added...
