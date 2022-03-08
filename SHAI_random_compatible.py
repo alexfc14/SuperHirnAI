@@ -1,25 +1,5 @@
-#!/home/goethe/venv/superhirn/bin/python3
-
 import numpy as np
 from Alice import evaluate_guess
-
-
-def numberToBase(n, b):
-    if n == 0:
-        return [0]
-    digits = []
-    while n:
-        digits.append(int(n % b))
-        n //= b
-    return digits[::-1]
-
-
-def to_base(index, base, num_digits):
-    # digits = np.base_repr(index, base)
-    digits = numberToBase(index, base)
-    zeros_pad = num_digits - len(digits)
-    zero_padded = [0]*zeros_pad + digits
-    return np.array(zero_padded)
 
 
 def is_compatible(code, history):
@@ -47,12 +27,6 @@ class Player():
         if self.verbose:
             print("PLAYER: Init player heuristics")
 
-        self.guess_index = -1
-        self.first_done = False
-
-    def next_guess(self):
-        self.guess_index += 1
-
     # this method will be called by the Referee. have fun putting AI here:
 
     def make_a_guess(self, history, remaining_time_in_sec):
@@ -60,16 +34,8 @@ class Player():
         if self.verbose:
             print(f"PLAYER: Remaining_time= {remaining_time_in_sec}")
 
-        if not self.first_done:
-            guess = self.rng.integers(0, self.n_colors, size=self.codelength)
-            self.first_done = True
-            return guess
-
         compatible = False
         while not compatible:
-            self.next_guess()
-            guess = to_base(self.guess_index, self.n_colors, self.codelength)
+            guess = self.rng.integers(0, self.n_colors, size=self.codelength)
             compatible = is_compatible(guess, history)
-            # print('guess', guess, 'is', compatible, 'compatible')
-
         return guess

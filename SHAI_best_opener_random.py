@@ -1,5 +1,3 @@
-#!/home/goethe/venv/superhirn/bin/python3
-
 import numpy as np
 from Alice import evaluate_guess
 
@@ -29,6 +27,13 @@ class Player():
         if self.verbose:
             print("PLAYER: Init player heuristics")
 
+        self.guess_index = -1
+        self.first_done = False
+        self.best_opener = np.array([0, 0, 1, 1, 2])
+
+    def next_guess(self):
+        self.guess_index += 1
+
     # this method will be called by the Referee. have fun putting AI here:
 
     def make_a_guess(self, history, remaining_time_in_sec):
@@ -36,8 +41,13 @@ class Player():
         if self.verbose:
             print(f"PLAYER: Remaining_time= {remaining_time_in_sec}")
 
+        if not self.first_done:
+            self.first_done = True
+            return self.best_opener
+
         compatible = False
         while not compatible:
             guess = self.rng.integers(0, self.n_colors, size=self.codelength)
             compatible = is_compatible(guess, history)
+
         return guess
