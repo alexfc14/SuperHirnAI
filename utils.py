@@ -2,26 +2,12 @@
 import itertools
 import numpy as np
 from Alice import evaluate_guess
+from generator import generator
 
 
 def itertools_generator(n_colors, codelength):
     for i in itertools.product(range(n_colors), repeat=codelength):
         yield np.array(i)
-
-# class Generator:
-#     def __init__(self, n_colors, codelength):
-#         self.n_colors = n_colors
-#         self.codelength = codelength
-#         self.N
-#         self.index = 0
-
-#     def next_guess(self):
-#         self.index += 1
-#         self.index //= self.N
-
-#     def get_guess(self):
-#         return to_base(self.guess_index, self.n_colors, self.codelength)
-
 
 def is_compatible(candidate, guess, guess_output):
     return guess_output == evaluate_guess(candidate, guess, verbose=False)
@@ -69,30 +55,31 @@ def get_entropy(guess, n_colors, codelength):
     return entropy
 
 
-n_colors = 7
-codelength = 7
+if __name__ == "__main__":
+    n_colors = 4
+    codelength = 5
 
-max_entropy = 0
-best_guess = None
+    max_entropy = 0
+    best_guess = None
 
-# openers = itertools_generator(n_colors, codelength)
-openers = [
-    np.array((0, 1, 2, 3, 4)),
-    np.array((0, 0, 1, 2, 3)),
-    np.array((0, 0, 1, 1, 2)),
-    np.array((0, 0, 0, 1, 2)),
-    np.array((0, 0, 0, 1, 1)),
-    np.array((0, 0, 0, 0, 1)),
-    np.array((0, 0, 0, 0, 0))
-]
+    # openers = itertools_generator(n_colors, codelength)
+    openers = [
+        np.array((0, 1, 2, 3, 4)),
+        np.array((0, 0, 1, 2, 3)),
+        np.array((0, 0, 1, 1, 2)),
+        np.array((0, 0, 0, 1, 2)),
+        np.array((0, 0, 0, 1, 1)),
+        np.array((0, 0, 0, 0, 1)),
+        np.array((0, 0, 0, 0, 0))
+    ]
 
-for guess in openers:
-    entropy = get_entropy(guess, n_colors, codelength)
-    if entropy > max_entropy:
-        max_entropy = entropy
-        best_guess = guess
-    print('guess', guess, 'has entropy gain', entropy, 'or',
-          n_colors ** (information(n_colors**codelength, n_colors) - entropy), 'average possible codes')
+    for guess in openers:
+        entropy = get_entropy(guess, n_colors, codelength)
+        if entropy > max_entropy:
+            max_entropy = entropy
+            best_guess = guess
+        print('guess', guess, 'has entropy gain', entropy, 'or',
+            n_colors ** (information(n_colors**codelength, n_colors) - entropy), 'average possible codes')
 
-print('best opener for a code of', n_colors, 'colors', 'and length',
-      codelength,  'is', best_guess, 'with entropy', max_entropy)
+    print('best opener for a code of', n_colors, 'colors', 'and length',
+        codelength,  'is', best_guess, 'with entropy', max_entropy)

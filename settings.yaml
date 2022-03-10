@@ -42,14 +42,14 @@ gamemodi:
 tournament_sections:
     - title: starting_small
       gamemodus: small
-      players: [heuristics_003]
-      n_games: 300 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
+      players: [SHAI_cells]
+      n_games: 100 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
       salt: non-deterministic # use another string (different from 'non-deterministic') to get a deterministic run. At competition day, we will do that for reproducibility of the results.
 
     # a tournament can contain many tournament sections. They will be played in listed order. 
     - title: medium_complexity
       gamemodus: medium
-      players: [heuristics_002] # not all three players participating now
+      players: [SHAI_best_opener_random] # not all three players participating now
       n_games: 0
       salt: non-deterministic
 

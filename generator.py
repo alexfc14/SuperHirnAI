@@ -10,9 +10,6 @@ class Generator:
 
     def next(self):
         self.current[self.slot] += 1
-        self.clip_units()
-
-    def clip_units(self):
         if self.current[self.slot] == self.n_colors:
             self.current[self.slot] = 0
             self.slot -= 1
@@ -21,24 +18,38 @@ class Generator:
             self.slot = self.codelength - 1
 
     def done(self):
-        for i in self.current:
-            if i < self.n_colors - 1:
-                return False
-        return True
+        return all(self.current == self.n_colors - 1)
 
     def __iter__(self):
-        done = False
-        while not done:
+        while True:
             yield self.current
-            done = self.done()
+            if self.done():
+                break
             self.next()
+
+def generator(n_colors, codelength):
+    slot = codelength - 1
+    current = np.zeros(codelength)
+    
+    while True:
+        yield current
+
+        if all(current == n_colors - 1):
+            break
+        
+        current[slot] += 1
+        while current[slot] == n_colors:
+            current[slot] = 0
+            slot -= 1
+            current[slot] += 1
+        slot = codelength - 1
 
 
 if __name__ == "__main__":
     n_colors = 3
     codelength = 3
 
-    gen = Generator(n_colors, codelength)
-    for guess in gen:
+    # for guess in Generator(n_colors, codelength):
+    for guess in generator(n_colors, codelength):
         a = 0
         print(guess)
