@@ -4,6 +4,12 @@ import numpy as np
 from Alice import evaluate_guess
 from generator import generator
 
+def get_guess(event):
+    return event[0]
+def blacks(event):
+    return event[1][0]
+def whites(event):
+    return event[1][1]
 
 def itertools_generator(n_colors, codelength):
     for i in itertools.product(range(n_colors), repeat=codelength):
