@@ -64,6 +64,7 @@ class Player():
 
         return self.current()
 
+
 if __name__ == "__main__":
     from Alice import Alice
     n_colors = 13
