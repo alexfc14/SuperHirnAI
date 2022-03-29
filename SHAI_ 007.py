@@ -134,8 +134,13 @@ class Player():
                         if len([c for c in unconfirmed if value == c.current()]) == 0:
                             for c in unconfirmed:
                                 c.discard(value)
+    
+    def set_current(self, values):
+        assert len(values) == self.codelength
+        for cell, value in zip(self.cells, values):
+            cell.set(value)
 
-    def random_compatible_guess(self, history, max_tries=10**3):
+    def random_compatible_guess(self, history, max_tries=10**2):
         for i in range(max_tries):
             guess = np.array([np.random.choice(c.possible_values) for c in self.cells])
             if is_compatible(guess, history):
@@ -155,9 +160,11 @@ class Player():
         
         self.analyze(history)
 
-        rg = self.random_compatible_guess(history)
-        if rg is not None:
-            return rg
+        
+        guess = self.random_compatible_guess(history)
+        if guess is not None:
+            self.set_current(guess)
+            return self.current()
 
         # Cells with fewer (>1) possible values offer more discarding % power
         prioritized_cells = sorted(
