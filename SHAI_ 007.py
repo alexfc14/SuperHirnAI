@@ -135,6 +135,13 @@ class Player():
                             for c in unconfirmed:
                                 c.discard(value)
 
+    def random_compatible_guess(self, history, max_tries=10**3):
+        for i in range(max_tries):
+            guess = np.array([np.random.choice(c.possible_values) for c in self.cells])
+            if is_compatible(guess, history):
+                print('compatible')
+                return guess
+
     # this method will be called by the Referee. have fun putting AI here:
     def make_a_guess(self, history, remaining_time_in_sec):
         if self.verbose:
@@ -147,6 +154,10 @@ class Player():
             return self.current()
         
         self.analyze(history)
+
+        rg = self.random_compatible_guess(history)
+        if rg is not None:
+            return rg
 
         # Cells with fewer (>1) possible values offer more discarding % power
         prioritized_cells = sorted(
