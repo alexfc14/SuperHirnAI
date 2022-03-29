@@ -5,8 +5,9 @@ from utils import is_compatible_with_history as is_compatible
 from utils import get_guess, blacks, whites
 
 class Cell:
-    def __init__(self, n_colors):
+    def __init__(self, n_colors, position=None):
         self.n_colors = n_colors
+        self.position = position
         self.possible_values = list(range(n_colors))
         self.index = 0
     
@@ -25,8 +26,12 @@ class Cell:
     
     def discard(self, value):
         if value in self.possible_values:
+            print('discard', value, 'from', self.position)
+            # decrease the index if we deleted a value below current
+            discard_index = self.possible_values.index(value)
+            if discard_index <= self.index:
+                self.index -= 1
             self.possible_values.remove(value)
-            self.adjust_index()
     
     def set(self, value):
         self.index = self.possible_values.index(value)
@@ -50,7 +55,7 @@ class Player():
         # self.best_opener = np.array([0, 0, 1, 1, 2])
         self.best_opener = self.rng.integers(0, self.n_colors, size=self.codelength)
         self.slot = self.codelength - 1
-        self.cells = [Cell(n_colors) for i in range(codelength)]
+        self.cells = [Cell(n_colors, p) for p in range(codelength)]
     
     def current(self):
         return np.array([cell.current() for cell in self.cells])
@@ -62,20 +67,28 @@ class Player():
             last = history[-1]
             if blacks(last) == whites(last) == 0:
                 # Discard all numbers present in guess from every cell
-                for v in get_guess(last):
+                for value in get_guess(last):
                     for cell in self.cells:
-                        cell.discard(v)
-        if len(history) == 1:
+                        cell.discard(value)
+            if blacks(last) + whites(last) == self.codelength:
+                # Discard absent values
+                possible = set(range(self.n_colors))
+                present = set(get_guess(last))
+                absent = possible - present
+                for value in absent:
+                    for cell in self.cells:
+                        cell.discard(value)
+        if len(history) < 2:
             return
         
         last = history[-1]
         past = history[-2]
 
         diff = (get_guess(last) != get_guess(past))
+        slot = diff.tolist().index(True)
         if sum(diff) == 1:
             if blacks(last) != blacks(past):
                 # Discard the one with highest blacks
-                slot = diff.tolist().index(True)
                 if blacks(last) > blacks(past):
                     value = get_guess(last)[slot]
                 else:
@@ -83,26 +96,44 @@ class Player():
                 self.cells[slot].confirm(value)
             else:
                 # Discard both
-                slot = diff.tolist().index(True)
                 for event in (last, past):
                     value = get_guess(event)[slot]
                     self.cells[slot].discard(value)
-            if whites(last) == whites(past):
-                if (whites(last) == 0) and (blacks(last) <= blacks(past)):
+            if whites(last) == whites(past) and whites(last) == 0:
+                if (blacks(last) == blacks(past)):
                     # Discard both everywhere
-                    slot = diff.tolist().index(True)
                     for event in (last, past):
                         value = get_guess(event)[slot]
-                        for cell in self.cells:
+                        unconfirmed = [c for c in self.cells if len(c.possible_values) > 1]
+                        if len([c for c in unconfirmed if value == c.current()]) == 0:
+                            for cell in unconfirmed:
+                                cell.discard(value)
+                elif blacks(last) < blacks(past):
+                    # Discard last everywhere
+                    value = get_guess(last)[slot]
+                    unconfirmed = [c for c in self.cells if len(c.possible_values) > 1]
+                    if len([c for c in unconfirmed if value == c.current()]) == 0:
+                        for cell in unconfirmed:
                             cell.discard(value)
-            elif whites(last) < whites(past):
-                slot = diff.tolist().index(True)
-                v = get_guess(last)[slot]
-                unconfirmed = [c for c in self.cells if len(c.possible_values) > 1]
+            elif whites(last) < whites(past) and blacks(last) == blacks(past):
+                value = get_guess(last)[slot]
                 # If it's not present in other unconfirmed cells, discard
-                if len([c for c in unconfirmed if v == c.current()]) == 0:
+                unconfirmed = [c for c in self.cells if len(c.possible_values) > 1]
+                if len([c for c in unconfirmed if value == c.current()]) == 0:
                     for c in unconfirmed:
-                        c.discard(v)
+                        c.discard(value)
+            elif whites(last) > whites(past) and blacks(last) == blacks(past):
+                # Go back through all prev guesses of this cell that didn't contribute to white
+                # TODO fix look back bug
+                for event in history[:-1][::-1]:
+                    diff = get_guess(last) != get_guess(event)
+                    if sum(diff) == 1 and slot == diff.tolist().index(True)\
+                    and whites(last) > whites(event):
+                        value = get_guess(event)[slot]
+                        unconfirmed = [c for c in self.cells if len(c.possible_values) > 1]
+                        if len([c for c in unconfirmed if value == c.current()]) == 0:
+                            for c in unconfirmed:
+                                c.discard(value)
 
     # this method will be called by the Referee. have fun putting AI here:
     def make_a_guess(self, history, remaining_time_in_sec):
@@ -122,6 +153,8 @@ class Player():
             [c for c in self.cells if len(c.possible_values) > 1], 
             key = lambda cell: len(cell.possible_values)
         )
+        if not len(prioritized_cells):
+            return self.current()
         for cell in prioritized_cells:
             current_value = cell.current()
             # Values possible in fewer cells allow discarding via white
@@ -163,6 +196,7 @@ if __name__ == "__main__":
     while True:  # main game loop. loop till break because of won or lost game
         guess = player.make_a_guess(alice.history, None)
         alice_answer = alice(guess)
+        print('ALICE: Secret code is', alice.secret)
         if alice_answer == "GAME WON":
             break
     score = len(alice.history)
