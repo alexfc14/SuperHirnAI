@@ -5,11 +5,12 @@ from utils import is_compatible_with_history as is_compatible
 from utils import get_guess, blacks, whites
 
 class Cell:
-    def __init__(self, n_colors, position=None):
+    def __init__(self, n_colors, position=None, verbose=True):
         self.n_colors = n_colors
         self.position = position
         self.possible_values = list(range(n_colors))
         self.index = 0
+        self.verbose = verbose
     
     def current(self):
         return self.possible_values[self.index]
@@ -26,7 +27,8 @@ class Cell:
     
     def discard(self, value):
         if value in self.possible_values:
-            print('discard', value, 'from', self.position)
+            if self.verbose:
+                print('discard', value, 'at', self.position)
             # decrease the index if we deleted a value below current
             discard_index = self.possible_values.index(value)
             if discard_index <= self.index:
@@ -37,6 +39,8 @@ class Cell:
         self.index = self.possible_values.index(value)
     
     def confirm(self, value):
+        if self.verbose:
+            print('confirm', value, 'at', self.position)
         self.possible_values = [value]
         self.index = 0
 
@@ -55,7 +59,7 @@ class Player():
         # self.best_opener = np.array([0, 0, 1, 1, 2])
         self.best_opener = self.rng.integers(0, self.n_colors, size=self.codelength)
         self.slot = self.codelength - 1
-        self.cells = [Cell(n_colors, p) for p in range(codelength)]
+        self.cells = [Cell(n_colors, p, self.verbose) for p in range(codelength)]
     
     def current(self):
         return np.array([cell.current() for cell in self.cells])
@@ -144,7 +148,8 @@ class Player():
         for i in range(max_tries):
             guess = np.array([np.random.choice(c.possible_values) for c in self.cells])
             if is_compatible(guess, history):
-                print('compatible')
+                if self.verbose:
+                    print('compatible')
                 return guess
 
     # this method will be called by the Referee. have fun putting AI here:
@@ -203,19 +208,21 @@ if __name__ == "__main__":
     from Alice import Alice
     n_colors = 13
     codelength = 8
-    alice = Alice(n_colors=n_colors,
-                  codelength=codelength,
-                  seed=np.random.randint(0, 2**31),
-                  verbose=True)
-    player = Player(
-        {'codelength':codelength, 'n_colors':n_colors}, 
-        seed=np.random.randint(0, 2**31)
-    )
-    while True:  # main game loop. loop till break because of won or lost game
-        guess = player.make_a_guess(alice.history, None)
-        alice_answer = alice(guess)
-        print('ALICE: Secret code is', alice.secret)
-        if alice_answer == "GAME WON":
-            break
-    score = len(alice.history)
-    print('score', score)
+    for i in range(1000):
+        alice = Alice(n_colors=n_colors,
+            codelength=codelength,
+            seed=np.random.randint(0, 2**31),
+            verbose=True)
+        player = Player(
+            {'codelength':codelength, 'n_colors':n_colors}, 
+            seed=np.random.randint(0, 2**31),
+            verbose=True
+        )
+        while True:  # main game loop. loop till break because of won or lost game
+            guess = player.make_a_guess(alice.history, None)
+            alice_answer = alice(guess)
+            # print('ALICE: Secret code is', alice.secret)
+            if alice_answer == "GAME WON":
+                break
+        score = len(alice.history)
+        print('score', score)
