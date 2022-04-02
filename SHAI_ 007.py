@@ -40,8 +40,12 @@ class Cell:
         self.index = self.possible_values.index(value)
     
     def confirm(self, value):
-        if self.verbose:
-            print('confirm', value, 'at', self.position)
+        if self.unconfirmed():
+            if self.verbose:
+                print('confirm', value, 'at', self.position)
+        elif self.current() != value:
+            print('what??')
+
         self.possible_values = [value]
         self.index = 0
     
@@ -73,22 +77,35 @@ class Player():
             if cell.unconfirmed():
                 yield cell
     
-    def absent_in_unconfirmed(self, value):
-        for c in self.unconfirmed():
-            if c.current() == value:
-                return False
-        return True
-    
-    def not_white_nor_black(self, value):
-        if self.absent_in_unconfirmed(value):
+    def not_white_nor_black(self, slot, event):
+        guess = get_guess(event)
+        value = guess[slot]
+        
+        others = [guess[i] for i in range(self.codelength)
+                    if slot != i and\
+                    ( self.cells[i].unconfirmed() #confirmed cells do not contribute to whites in current guesses, but blacks
+                    or guess[i] != self.cells[i].possible_values[0]) # but could if reanalizing when we had not confirmed this cell yet
+                ]
+        if value not in others:# or other whites in unconfirmed cells whatsoever
             for cell in self.unconfirmed():
                 cell.discard(value)
+    
+    def not_black(self, slot, event):
+        value = get_guess(event)[slot]
+        self.cells[slot].discard(value)
+    
+    def black(self, slot, event):
+        value = get_guess(event)[slot]
+        self.cells[slot].confirm(value)
 
     def analyze(self, history):
         if len(history) == 0:
             return
         elif len(history) >= 1:
             last = history[-1]
+            if blacks(last) == 0:
+                for slot in range(self.codelength):
+                    self.not_black(slot, last)
             if blacks(last) == whites(last) == 0:
                 # Discard all numbers present in guess from every cell
                 for value in get_guess(last):
@@ -112,41 +129,36 @@ class Player():
         slot = diff.tolist().index(True)
         if sum(diff) == 1:
             if blacks(last) != blacks(past):
-                # Discard the one with highest blacks
+                # Confirm the one with highest blacks
                 if blacks(last) > blacks(past):
-                    value = get_guess(last)[slot]
+                    self.black(slot, last)
                 else:
-                    value = get_guess(past)[slot]
-                self.cells[slot].confirm(value)
+                    self.black(slot, past)
             else:
                 # Discard both
                 for event in (last, past):
-                    value = get_guess(event)[slot]
-                    self.cells[slot].discard(value)
+                    self.not_black(slot, event)
+            
             if whites(last) == whites(past) and whites(last) == 0:
                 if (blacks(last) == blacks(past)):
-                    # Discard both everywhere
                     for event in (last, past):
-                        value = get_guess(event)[slot]
-                        self.not_white_nor_black(value)
+                        self.not_white_nor_black(slot, event)
                 elif blacks(last) < blacks(past):
-                    value = get_guess(last)[slot]
-                    self.not_white_nor_black(value)
+                    self.not_white_nor_black(slot, last)
             elif whites(last) < whites(past) and blacks(last) == blacks(past):
-                value = get_guess(last)[slot]
-                self.not_white_nor_black(value)
+                self.not_white_nor_black(slot, last)
             for event in history[:-1][::-1]:
                 # Go back through all prev guesses of this cell that didn't contribute to white
-                # TODO fix look back bug
                 if whites(last) > whites(event) and blacks(last) == blacks(event):
                     diff = get_guess(last) != get_guess(event)
-                    if sum(diff) == 1 and slot == diff.tolist().index(True)\
-                    and whites(last) > whites(event):
-                        value = get_guess(event)[slot]
-                        # if self.verbose:
-                            # print('realize', event, 'not whites in slot', slot, 'value', value)
-                        self.not_white_nor_black(value)
-        
+                    if sum(diff) == 1:
+                        diff_slot = diff.tolist().index(True)
+                        if slot == diff_slot:
+                            self.not_white_nor_black(slot, event)
+        if self.verbose:
+            print('reanalize the past at', history[:-1][-1])
+        self.analyze(history[:-1])
+
     def set_current(self, values):
         assert len(values) == self.codelength
         for cell, value in zip(self.cells, values):
@@ -154,7 +166,9 @@ class Player():
 
     def random_compatible_guess(self, history, max_tries=100):
         for i in range(max_tries):
-            guess = np.array([np.random.choice(c.possible_values) for c in self.cells])
+            guess = np.array([
+                c.possible_values[self.rng.integers(0, len(c.possible_values))]
+                for c in self.cells])
             if is_compatible(guess, history):
                 if self.verbose:
                     print('compatible')
@@ -216,15 +230,19 @@ if __name__ == "__main__":
     from Alice import Alice
     n_colors = 13
     codelength = 8
-    verbose = True
+    verbose = False
     for i in range(1000):
+        seed=np.random.randint(0, 2**31)
+        # seed=1201655299
+        print(seed)
         alice = Alice(n_colors=n_colors,
             codelength=codelength,
-            seed=np.random.randint(0, 2**31),
+            seed=seed,
             verbose=verbose)
         player = Player(
             {'codelength':codelength, 'n_colors':n_colors}, 
-            seed=np.random.randint(0, 2**31),
+            seed=1,
+            # seed=np.random.randint(0, 2**31),
             verbose=verbose
         )
         while True:  # main game loop. loop till break because of won or lost game
