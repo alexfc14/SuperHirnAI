@@ -106,6 +106,11 @@ class Player():
             if blacks(last) == 0:
                 for slot in range(self.codelength):
                     self.not_black(slot, last)
+            if blacks(last) == self.codelength - len(list(self.unconfirmed())) and\
+            all(self.current() == get_guess(last)):
+                for c in self.unconfirmed():
+                    slot = self.cells.index(c)
+                    self.not_black(slot, last)
             if blacks(last) == whites(last) == 0:
                 # Discard all numbers present in guess from every cell
                 for value in get_guess(last):
@@ -234,7 +239,7 @@ if __name__ == "__main__":
     for i in range(1000):
         seed=np.random.randint(0, 2**31)
         # seed=1201655299
-        print(seed)
+        # print(seed)
         alice = Alice(n_colors=n_colors,
             codelength=codelength,
             seed=seed,
@@ -253,4 +258,3 @@ if __name__ == "__main__":
                 break
         score = len(alice.history)
         print('score', score)
-        print()
