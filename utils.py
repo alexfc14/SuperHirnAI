@@ -6,25 +6,35 @@ from generator import generator
 
 def get_guess(event):
     return event[0]
+
 def blacks(event):
     return event[1][0]
+
 def whites(event):
     return event[1][1]
+
+
+def col(X, c):
+    if type(X) == np.ndarray:
+        return X[:, c]
+    else:
+        return [X[v][c] for v in range(len(X.keys()))]
+
 
 def itertools_generator(n_colors, codelength):
     for i in itertools.product(range(n_colors), repeat=codelength):
         yield np.array(i)
 
+
+
 def is_compatible(candidate, guess, guess_output):
     return guess_output == evaluate_guess(candidate, guess, verbose=False)
-
 
 def is_compatible_with_history(candidate, history):
     return all(
         is_compatible(candidate, guess, output)
-        for guess, output in history
+        for guess, output in history#[::-1]
     )
-
 
 def survivors(secret, guess, candidates):
     output = evaluate_guess(secret, guess, verbose=False)

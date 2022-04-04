@@ -1,8 +1,11 @@
+from itertools import chain
 import numpy as np
 from Alice import evaluate_guess
 
 from utils import is_compatible_with_history as is_compatible
-from utils import get_guess, blacks, whites
+from utils import get_guess, blacks, whites, col
+
+import pulp
 
 class Cell:
     def __init__(self, n_colors, position=None, verbose=True):
@@ -176,28 +179,56 @@ class Player():
                 for c in self.cells])
             if is_compatible(guess, history):
                 if self.verbose:
-                    print('compatible')
+                    print('found compatible random guess')
                 return guess
 
-    # this method will be called by the Referee. have fun putting AI here:
-    def make_a_guess(self, history, remaining_time_in_sec):
-        # if self.verbose:
-            # print(f"PLAYER: Remaining_time= {remaining_time_in_sec}")
+    def linear_programming_compatible_guess(self, history):
+        Cols = range(self.codelength)
+        Vals = range(self.n_colors)
 
-        if not self.first_done:
-            self.first_done = True
-            for i in range(self.codelength):
-                self.cells[i].set(self.best_opener[i])
-            return self.current()
+        problem = pulp.LpProblem("SuperHirn Problem", pulp.LpMinimize)
+        X = pulp.LpVariable.dicts("X", (Vals, Cols), 0, 1, pulp.LpInteger)
+        problem += 0, "Arbitrary Objective Function"
+        for c in Cols:
+            problem += pulp.lpSum(col(X, c)) == 1, f"One value per cell {c}"
         
-        self.analyze(history)
-
         
-        guess = self.random_compatible_guess(history)
-        if guess is not None:
-            self.set_current(guess)
-            return self.current()
+        for event in history:
+            # Build the guess matrix with indicator column vectors
+            G = np.zeros((self.n_colors, self.codelength))
+            for c, v in enumerate(get_guess(event)):
+                G[v, c] = 1
 
+            # match in col c is dot(X[:,c], G[:, c], giving 1 only if they have identical value index
+            exact_matches = [pulp.lpDot(col(G, c), col(X, c)) for c in Cols]
+            problem += pulp.lpSum(exact_matches) == blacks(event), f"exact matches == {blacks(event)} at event {event}"
+
+            cross_matches = [[pulp.lpDot(col(G, c1), col(X, c2)) for c2 in Cols if c1 != c2] for c1 in Cols]
+            problem += pulp.lpSum(chain(*cross_matches)) == whites(event), f"cross matches == {whites(event)} at event {event}"
+
+            for c in Cols:
+                problem += pulp.lpSum([exact_matches[c], cross_matches[c]]) <= 1, f"One match max per cell {c}  at event {event}"
+        
+        # solver = pulp.GUROBI_CMD(msg=0)
+        solver=pulp.PULP_CBC_CMD(msg=0)
+        problem.solve(solver=solver)
+        # print("Status:", pulp.LpStatus[problem.status])
+        solution = np.zeros(self.codelength, dtype='int')
+        for c in Cols:
+            for v in Vals:
+                if pulp.value(X[v][c])==1:
+                    solution[c] = v
+        print('solution', solution)
+        print('status', pulp.LpStatus[problem.status])
+        print('compatible', is_compatible(solution, history))
+        for name, constraint in problem.constraints.items():
+            print(name)
+            print(constraint)
+        print()
+        return solution
+
+
+    def prioritized_guess(self, history):
         # Cells with fewer (>1) possible values offer more discarding % power
         prioritized_cells = sorted(
             self.unconfirmed(), 
@@ -230,12 +261,38 @@ class Player():
         cell.set(value)
         return self.current()
 
+    # this method will be called by the Referee. have fun putting AI here:
+    def make_a_guess(self, history, remaining_time_in_sec):
+        # if self.verbose:
+            # print(f"PLAYER: Remaining_time= {remaining_time_in_sec}")
+
+        # if not self.first_done:
+        #     self.first_done = True
+        #     for i in range(self.codelength):
+        #         self.cells[i].set(self.best_opener[i])
+        #     return self.current()
+        
+        # self.analyze(history)
+
+        
+        guess = self.random_compatible_guess(history)
+        if guess is not None:
+            self.set_current(guess)
+            return self.current()
+        
+        guess = self.linear_programming_compatible_guess(history)
+        if guess is not None:
+            self.set_current(guess)
+            return self.current()
+
+        return self.prioritized_guess(history)
+
 
 if __name__ == "__main__":
     from Alice import Alice
-    n_colors = 13
-    codelength = 8
-    verbose = False
+    n_colors = 3
+    codelength = 4
+    verbose = True
     for i in range(1000):
         seed=np.random.randint(0, 2**31)
         # seed=1201655299
