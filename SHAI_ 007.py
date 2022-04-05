@@ -190,6 +190,9 @@ class Player():
         X = pulp.LpVariable.dicts(name="X", indices=(Cells, Vals), lowBound=0, upBound=1, cat=pulp.LpInteger)
         for i in Cells:
             problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
+            for v in Vals:
+                if v not in self.cells[i].possible_values:
+                    problem += X[i][v] == 0, f"Remove discarded value {v} from cell {i}"
         
         for episode, event in enumerate(history):
             # Build the guess matrix with indicator vectors as rows
@@ -277,8 +280,7 @@ class Player():
                 self.cells[i].set(self.best_opener[i])
             return self.current()
         
-        # self.analyze(history)
-
+        self.analyze(history)
         
         # guess = self.random_compatible_guess(history)
         # if guess is not None:
