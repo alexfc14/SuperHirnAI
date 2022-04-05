@@ -14,11 +14,17 @@ def whites(event):
     return event[1][1]
 
 
-def col(X, c):
+def col(X, v):
     if type(X) == np.ndarray:
-        return X[:, c]
+        return X[:, v]
     else:
-        return [X[v][c] for v in range(len(X.keys()))]
+        return [X[i][v] for i in X.keys()]
+
+def row(X, i):
+    if type(X) == np.ndarray:
+        return X[i]
+    else:
+        return [X[i][v] for v in X[i].keys()]
 
 
 def itertools_generator(n_colors, codelength):
