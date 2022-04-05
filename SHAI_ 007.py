@@ -2,7 +2,7 @@ from itertools import chain
 import numpy as np
 from Alice import evaluate_guess
 
-from utils import is_compatible_with_history as is_compatible
+from utils import is_compatible_with_history as is_compatible, lpMin
 from utils import get_guess, blacks, whites, col, row
 
 import pulp
@@ -203,15 +203,7 @@ class Player():
             # matches of each value mv is the minimum of number of occurrences of value v in guess g and in secret code x
             m = pulp.LpVariable.dicts(f"m({episode})", Vals, 0, self.codelength, pulp.LpInteger)
             for v in Vals:
-                x = m[v]
-                x1 = sum(col(G, v))
-                x2 = sum(col(X, v))
-                M = self.n_colors*100
-                problem += x <= x1
-                problem += x <= x2
-                y = pulp.LpVariable(name=f"y({episode})_{v}", cat=pulp.LpBinary)
-                problem += x >= x1 - M*(1-y)
-                problem += x >= x2 - M*(y)
+                lpMin(problem, x=m[v], x1 = sum(col(G, v)), x2 = sum(col(X, v)), M=self.n_colors*100, name_suffix=f"({episode})_{v}")
                 
             # Black matches
             problem += pulp.lpSum([pulp.lpDot(row(G, i), row(X, i)) for i in Cells]) == blacks(event), f"Blacks == {blacks(event)} at event {episode}: {event}"

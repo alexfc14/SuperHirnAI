@@ -1,4 +1,4 @@
-
+import pulp
 import itertools
 import numpy as np
 from Alice import evaluate_guess
@@ -25,6 +25,14 @@ def row(X, i):
         return X[i]
     else:
         return [X[i][v] for v in X[i].keys()]
+
+def lpMin(problem, x, x1, x2, name_suffix, M=10**10):
+    """Enforce x = min(x1, x2) in LP using the big M trick."""
+    problem += x <= x1
+    problem += x <= x2
+    y = pulp.LpVariable(name=f"y{name_suffix}", cat=pulp.LpBinary)
+    problem += x >= x1 - M*(1-y)
+    problem += x >= x2 - M*(y)
 
 
 def itertools_generator(n_colors, codelength):
