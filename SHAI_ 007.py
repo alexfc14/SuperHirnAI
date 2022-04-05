@@ -186,9 +186,8 @@ class Player():
         Cells = range(self.codelength)
         Vals = range(self.n_colors)
 
-        problem = pulp.LpProblem("SuperHirn Problem", pulp.LpMinimize)
-        X = pulp.LpVariable.dicts("X", (Cells, Vals), 0, 1, pulp.LpInteger)
-        problem += 0, "Arbitrary Objective Function"
+        problem = pulp.LpProblem("SuperHirn Problem", pulp.LpMaximize)
+        X = pulp.LpVariable.dicts(name="X", indices=(Cells, Vals), lowBound=0, upBound=1, cat=pulp.LpInteger)
         for i in Cells:
             problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
         
@@ -197,35 +196,24 @@ class Player():
             G = np.zeros((self.codelength, self.n_colors))
             for i, v in enumerate(get_guess(event)):
                 G[i, v] = 1
-
-            # Matches matrix mij = 1 only if cell i from guess (source) == cell j from secret code (target)
-            M = [[pulp.lpDot(row(G, i), row(X, j)) for j in Cells] for i in Cells]
-
-            # Matches may be counted or not according to countings matrix C
-            C = pulp.LpVariable.dicts(f"C({episode})", (Cells, Cells), 0, 1, pulp.LpInteger)
-            for i in Cells:
-                # 2.1) only one match per source cell: sum_j(cij) <= 1
-                row_sum = pulp.lpSum(row(C, i))
-                problem +=  row_sum <= 1, f"One match max counted at source cell {i} at event {episode}: {event}"
-                # 2.2) only one match per target cell: sum_j(cij) <= 1
-                col_sum = pulp.lpSum(col(C, i)) <= 1
-                problem += col_sum <= 1, f"One match max counted at target cell {i} at event {episode}: {event}"
-                for j in Cells:
-                     if i != j:
-                        # 1) a match may or not be counted: cij <= mij, for i!=j
-                        problem += C[i][j] <= M[i][j], f"Match between {i} and {j} may be counted or not at event {episode}: {event}"
-                        # 2.1.* cannot ignore all matches in one row
-                        problem += M[i][j] <= row_sum, f"If match between {i} and {j}, row count sum non zero at event {episode}: {event}"
-                        # 2.2.* cannot ignore all matches in one column
-                        problem += M[i][j] <= col_sum,  f"If match between {i} and {j}, col count sum non zero at event {episode}: {event}"                     
-                # 3) diagonal matches are always counted (black first)
-                problem += C[i][i] == M[i][i], f"Diagonal {i} always counted at event {episode}: {event}"
-                # TODO: impose left first count order (optional)
             
+            # matches of each value mv is the minimum of number of occurrences of value v in guess g and in secret code x
+            m = pulp.LpVariable.dicts(f"m({episode})", Vals, 0, self.codelength, pulp.LpInteger)
+            for v in Vals:
+                x = m[v]
+                x1 = sum(col(G, v))
+                x2 = sum(col(X, v))
+                M = self.n_colors*100
+                problem += x <= x1
+                problem += x <= x2
+                y = pulp.LpVariable(name=f"y({episode})_{v}", cat=pulp.LpBinary)
+                problem += x >= x1 - M*(1-y)
+                problem += x >= x2 - M*(y)
+                
             # Black matches
-            problem += pulp.lpSum([C[i][i] for i in Cells]) == blacks(event), f"Blacks == {blacks(event)} at event {episode}: {event}"
+            problem += pulp.lpSum([pulp.lpDot(row(G, i), row(X, i)) for i in Cells]) == blacks(event), f"Blacks == {blacks(event)} at event {episode}: {event}"
             # White matches
-            problem += pulp.lpSum([C[i][j] for i in Cells for j in Cells if i!=j]) == whites(event), f"Whites == {whites(event)} at event {episode}: {event}"
+            problem += pulp.lpSum(m) == blacks(event) + whites(event), f"Whites == {whites(event)} at event {episode}: {event}"
 
         # solver = pulp.GUROBI_CMD(msg=0)
         solver=pulp.PULP_CBC_CMD(msg=0)
@@ -235,34 +223,13 @@ class Player():
             for v in Vals:
                 if pulp.value(X[i][v]) == 1:
                     solution[i] = v
-        print('solution', solution)
-        print('status', pulp.LpStatus[problem.status])
         compatible = is_compatible(solution, history)
-        print('compatible', compatible)
-        if not compatible:
-            X_solution = np.zeros((self.codelength, self.n_colors))
-            for i in Cells:
-                for j in Vals:
-                    X_solution[i][j] = pulp.value(X[i][j])
-            print('X')
-            print(X_solution)
-            M_solution = np.zeros((self.codelength, self.codelength))
-            for i in Cells:
-                for j in Cells:
-                    M_solution[i][j] = pulp.value(M[i][j])
-            print('M')
-            print(M_solution)
-            C_solution = np.zeros((self.codelength, self.codelength))
-            for i in Cells:
-                for j in Cells:
-                    C_solution[i][j] = pulp.value(C[i][j])
-            print('C')
-            print(C_solution)
-            for name, constraint in problem.constraints.items():
-                print(name)
-                print(constraint)
-                print(pulp.value(constraint))    
-            print('oooh')
+        if self.verbose:
+            print('solution', solution)
+            print('status', pulp.LpStatus[problem.status])
+            print('compatible', compatible)
+        if not compatible:  
+            print('no bueno')
         return solution
 
 
@@ -328,9 +295,9 @@ class Player():
 
 if __name__ == "__main__":
     from Alice import Alice
-    n_colors = 3
-    codelength = 4
-    verbose = True
+    n_colors = 16
+    codelength = 10
+    verbose = False
     for i in range(1000):
         seed=np.random.randint(0, 2**31)
         # seed=1201655299
