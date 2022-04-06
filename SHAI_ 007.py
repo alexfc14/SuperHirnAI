@@ -163,9 +163,9 @@ class Player():
                         diff_slot = diff.tolist().index(True)
                         if slot == diff_slot:
                             self.not_white_nor_black(slot, event)
-        if self.verbose:
-            print('reanalize the past at', history[:-1][-1])
-        self.analyze(history[:-1])
+        # if self.verbose:
+        #     print('reanalize the past at', history[:-1][-1])
+        # self.analyze(history[:-1])
 
     def set_current(self, values):
         assert len(values) == self.codelength
@@ -227,12 +227,11 @@ class Player():
                     solution[i] = v
         compatible = is_compatible(solution, history)
         if self.verbose:
-            print('solution', solution)
             print('status', pulp.LpStatus[problem.status])
-            print('compatible', compatible)
         if not compatible:  
             print('no bueno')
-        return solution
+        else:
+            return solution
 
 
     def prioritized_guess(self, history):
@@ -270,28 +269,21 @@ class Player():
 
     # this method will be called by the Referee. have fun putting AI here:
     def make_a_guess(self, history, remaining_time_in_sec):
-        # if self.verbose:
-            # print(f"PLAYER: Remaining_time= {remaining_time_in_sec}")
+        if self.verbose:
+            print(f"PLAYER: Remaining_time= {remaining_time_in_sec}")
+
+        self.analyze(history)
 
         if not self.first_done:
             self.first_done = True
-            for i in range(self.codelength):
-                self.cells[i].set(self.best_opener[i])
-            return self.current()
-        
-        self.analyze(history)
-        
-        # guess = self.random_compatible_guess(history)
-        # if guess is not None:
-        #     self.set_current(guess)
-        #     return self.current()
-        
-        guess = self.linear_programming_compatible_guess(history)
-        if guess is not None:
-            self.set_current(guess)
-            return self.current()
+            guess = self.best_opener        
 
-        return self.prioritized_guess(history)
+        # guess = self.random_compatible_guess(history)
+        guess = self.linear_programming_compatible_guess(history)
+        # guess = self.prioritized_guess(history)
+        
+        self.set_current(guess)
+        return self.current()
 
 
 if __name__ == "__main__":
