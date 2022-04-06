@@ -209,9 +209,16 @@ class Player():
             problem += pulp.lpSum([pulp.lpDot(row(G, i), row(X, i)) for i in Cells]) == blacks(event), f"Blacks == {blacks(event)} at event {episode}: {event}"
             # White matches
             problem += pulp.lpSum(m) == blacks(event) + whites(event), f"Whites == {whites(event)} at event {episode}: {event}"
+        
+        # Warm start with last guess
+        warm_start = len(history) > 0
+        if warm_start:
+            for c in Cells:
+                for v in Vals:
+                    X[c][v].setInitialValue(G[c][v])
 
         # solver = pulp.GUROBI_CMD(msg=0)
-        solver=pulp.PULP_CBC_CMD(msg=0)
+        solver=pulp.PULP_CBC_CMD(msg=0, warmStart=True)
         problem.solve(solver=solver)
         solution = np.zeros(self.codelength, dtype='int')
         for i in Cells:
@@ -289,8 +296,8 @@ class Player():
 
 if __name__ == "__main__":
     from Alice import Alice
-    n_colors = 16
-    codelength = 10
+    n_colors = 13
+    codelength = 8
     verbose = False
     for i in range(1000):
         seed=np.random.randint(0, 2**31)
