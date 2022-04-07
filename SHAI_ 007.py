@@ -203,9 +203,18 @@ class Player():
                 G[i, v] = 1
             
             # matches of each value mv is the minimum of number of occurrences of value v in guess g and in secret code x
-            m = pulp.LpVariable.dicts(f"m({episode})", Vals, 0, self.codelength, pulp.LpInteger)
+            # m = pulp.LpVariable.dicts(f"m({episode})", Vals, 0, self.codelength, pulp.LpInteger)
+            # for v in Vals:
+            # lpMin(problem, x=m[v], x1 = sum(col(G, v)), x2 = sum(col(X, v)), M=self.n_colors*100, name_suffix=f"({episode})_{v}")
+            m = {}
             for v in Vals:
-                lpMin(problem, x=m[v], x1 = sum(col(G, v)), x2 = sum(col(X, v)), M=self.n_colors*100, name_suffix=f"({episode})_{v}")
+                guess_count = sum(col(G, v))
+                code_count = sum(col(X, v))
+                confirmed_count = len([c for c in self.cells if [v] == c.possible_values])
+                lowBound=min(guess_count, confirmed_count)
+                upBound=guess_count
+                m[v] = pulp.LpVariable(f"m({episode})_{v}", lowBound, upBound, pulp.LpInteger)
+                lpMin(problem, m[v], guess_count, code_count, M=self.n_colors*100, name_suffix=f"({episode})_{v}")
                 
             # Black matches
             problem += pulp.lpSum([pulp.lpDot(row(G, i), row(X, i)) for i in Cells]) == blacks(event), f"Blacks == {blacks(event)} at event {episode}: {event}"
@@ -294,12 +303,12 @@ class Player():
 
 if __name__ == "__main__":
     from Alice import Alice
-    n_colors = 13
+    n_colors = 5
     codelength = 8
-    verbose = False
+    verbose = True
     for i in range(1000):
         seed=np.random.randint(0, 2**31)
-        # seed=1201655299
+        seed=1325043143
         # print(seed)
         alice = Alice(n_colors=n_colors,
             codelength=codelength,
@@ -309,13 +318,14 @@ if __name__ == "__main__":
             {'codelength':codelength, 'n_colors':n_colors}, 
             seed=1,
             # seed=np.random.randint(0, 2**31),
-            verbose=False
+            verbose=True
         )
         while True:  # main game loop. loop till break because of won or lost game
             guess = player.make_a_guess(alice.history, None)
             alice_answer = alice(guess)
-            print('move nº', len(alice.history), 'info', player.information(), 'bits')
+            # print('move nº', len(alice.history), 'info', player.information(), 'bits')
             if alice_answer == "GAME WON":
                 break
         score = len(alice.history)
-        print('score', score)
+        info = codelength*np.log2(n_colors)
+        print('score', score, 'info:', round(info,1), 'bits', 'rate', round(info/score, 2), 'bits/guess')
