@@ -66,7 +66,6 @@ class Player():
         if self.verbose:
             print("PLAYER: Init player heuristics")
 
-        self.first_done = False
         # self.best_opener = np.array([0, 0, 1, 1, 2])
         self.best_opener = self.rng.integers(0, self.n_colors, size=self.codelength)
         self.slot = self.codelength - 1
@@ -79,6 +78,9 @@ class Player():
         for cell in self.cells:
             if cell.unconfirmed():
                 yield cell
+    
+    def information(self):
+        return sum([log2(len(c.possible_values)) for c in self.cells])
     
     def not_white_nor_black(self, slot, event):
         guess = get_guess(event)
@@ -218,8 +220,8 @@ class Player():
                     X[c][v].setInitialValue(G[c][v])
 
         # solver = pulp.GUROBI_CMD(msg=0)
-        solver=pulp.PULP_CBC_CMD(msg=0, warmStart=True)
-        problem.solve(solver=solver)
+        solver=pulp.PULP_CBC_CMD(msg=0, warmStart=True, presolve=True)
+        self.problem.solve(solver=solver)
         solution = np.zeros(self.codelength, dtype='int')
         for i in Cells:
             for v in Vals:
@@ -274,13 +276,17 @@ class Player():
 
         self.analyze(history)
 
-        if not self.first_done:
-            self.first_done = True
-            guess = self.best_opener        
+        guess = None
 
-        # guess = self.random_compatible_guess(history)
-        guess = self.linear_programming_compatible_guess(history)
-        # guess = self.prioritized_guess(history)
+        # if not len(history):
+        #     guess = self.best_opener      
+        # if guess is None:
+        #     if len(history) < 15:
+        #         guess = self.random_compatible_guess(history, max_tries=10000)
+        if guess is None:
+            guess = self.linear_programming_compatible_guess(history)
+        # if guess is None:
+        #     guess = self.prioritized_guess(history)
         
         self.set_current(guess)
         return self.current()
@@ -303,12 +309,12 @@ if __name__ == "__main__":
             {'codelength':codelength, 'n_colors':n_colors}, 
             seed=1,
             # seed=np.random.randint(0, 2**31),
-            verbose=verbose
+            verbose=False
         )
         while True:  # main game loop. loop till break because of won or lost game
             guess = player.make_a_guess(alice.history, None)
             alice_answer = alice(guess)
-            # print('ALICE: Secret code is', alice.secret)
+            print('move nº', len(alice.history), 'info', player.information(), 'bits')
             if alice_answer == "GAME WON":
                 break
         score = len(alice.history)
