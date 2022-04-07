@@ -80,7 +80,7 @@ class Player():
                 yield cell
     
     def information(self):
-        return sum([log2(len(c.possible_values)) for c in self.cells])
+        return sum([np.log2(len(c.possible_values)) for c in self.cells])
     
     def not_white_nor_black(self, slot, event):
         guess = get_guess(event)
@@ -221,7 +221,7 @@ class Player():
 
         # solver = pulp.GUROBI_CMD(msg=0)
         solver=pulp.PULP_CBC_CMD(msg=0, warmStart=True, presolve=True)
-        self.problem.solve(solver=solver)
+        problem.solve(solver=solver)
         solution = np.zeros(self.codelength, dtype='int')
         for i in Cells:
             for v in Vals:
