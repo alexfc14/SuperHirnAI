@@ -2,7 +2,7 @@ from itertools import chain
 import numpy as np
 from Alice import evaluate_guess
 
-from utils import fix_value, is_compatible_with_history as is_compatible, lpMin
+from utils import is_compatible_with_history as is_compatible, lpMin
 from utils import get_guess, blacks, whites, col, row
 
 import pulp
@@ -191,13 +191,14 @@ class Player():
         problem = pulp.LpProblem("SuperHirn Problem", pulp.LpMaximize)
         X = pulp.LpVariable.dicts(name="X", indices=(Cells, Vals), lowBound=0, upBound=1, cat=pulp.LpInteger)
         for i in Cells:
-            problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
             for v in Vals:
                 if v not in self.cells[i].possible_values:
-                    fix_value(X[i][v], 0)
+                    X[i][v] = 0
             if not self.cells[i].unconfirmed():
                 v = self.cells[i].possible_values[0]
-                fix_value(X[i][v], 1)
+                X[i][v] = 1
+        for i in Cells:
+            problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
         
         for episode, event in enumerate(history):
             # Build the guess matrix with indicator vectors as rows
@@ -216,8 +217,11 @@ class Player():
                 confirmed_count = len([c for c in self.cells if [v] == c.possible_values])
                 lowBound=min(guess_count, confirmed_count)
                 upBound=guess_count
-                m[v] = pulp.LpVariable(f"m({episode})_{v}", lowBound, upBound, pulp.LpInteger)
-                lpMin(problem, m[v], guess_count, code_count, M=self.n_colors*100, name_suffix=f"({episode})_{v}")
+                if lowBound != upBound:
+                    m[v] = pulp.LpVariable(f"m({episode})_{v}", lowBound, upBound, pulp.LpInteger)
+                    lpMin(problem, m[v], guess_count, code_count, M=self.n_colors*100, name_suffix=f"({episode})_{v}")
+                else:
+                    m[v] = lowBound
                 
             # Black matches
             problem += pulp.lpSum([pulp.lpDot(row(G, i), row(X, i)) for i in Cells]) == blacks(event), f"Blacks == {blacks(event)} at event {episode}: {event}"
@@ -229,14 +233,18 @@ class Player():
         if warm_start:
             for c in Cells:
                 for v in Vals:
-                    try:
+                    if type(X[c][v]) == pulp.LpVariable:
                         X[c][v].setInitialValue(G[c][v])
-                    except:
-                        X[c][v].setInitialValue(1-G[c][v])
-
-        # solver = pulp.GUROBI_CMD(msg=0)
-        solver=pulp.PULP_CBC_CMD(msg=0, warmStart=True, presolve=True)
-        problem.solve(solver=solver)
+        
+        try:
+            solver = pulp.GUROBI(msg=0, warmStart=True)
+            problem.solve(solver=solver)
+        except Exception as e:
+            if self.verbose:
+                print('GUROBI failed, using CBC. Reason:', e.message)
+            solver=pulp.PULP_CBC_CMD(msg=0, warmStart=True, presolve=True, timeLimit=10)
+            problem.solve(solver=solver)
+        
         solution = np.zeros(self.codelength, dtype='int')
         for i in Cells:
             for v in Vals:
@@ -297,23 +305,26 @@ class Player():
         # if guess is None:
         #     if len(history) < 15:
         #         guess = self.random_compatible_guess(history, max_tries=10000)
+        # if guess is None:
+        #     if len(history) < self.n_colors:
+        #         guess = np.repeat(len(history), self.codelength)
+        #         print('constant', len(history))
         if guess is None:
-            if self.information() < 50 or len(history) < 10:
-                print('linear programming')
-                guess = self.linear_programming_compatible_guess(history)
+            print('linear programming')
+            guess = self.linear_programming_compatible_guess(history)
         if guess is None:
             print('deductive guess')
             guess = self.prioritized_guess(history)
-        
+
         self.set_current(guess)
         return self.current()
 
 
 if __name__ == "__main__":
     from Alice import Alice
-    n_colors = 72
+    n_colors = 45
     codelength = 45
-    for i in range(1000):
+    for i in range(1):
         seed=np.random.randint(0, 2**31)
         # seed=1325043143
         # print(seed)
@@ -325,12 +336,13 @@ if __name__ == "__main__":
             {'codelength':codelength, 'n_colors':n_colors}, 
             seed=1,
             # seed=np.random.randint(0, 2**31),
-            verbose=False
+            verbose=True
         )
+        print('secret', alice.secret, 'info', round(codelength*np.log2(n_colors),1))
         while True:  # main game loop. loop till break because of won or lost game
             guess = player.make_a_guess(alice.history, None)
             alice_answer = alice(guess)
-            print(alice_answer, 'move nº', len(alice.history), 'info', round(player.information(), 2), 'bits')
+            print('move nº', len(alice.history), 'info', round(player.information(), 2), 'bits', guess, alice_answer)
             if alice_answer == "GAME WON":
                 break
         score = len(alice.history)

@@ -34,16 +34,10 @@ def lpMin(problem, x, x1, x2, name_suffix, M=10**10):
     problem += x >= x1 - M*(1-y)
     problem += x >= x2 - M*(y)
 
-def fix_value(x, v):
-    x.setInitialValue(v)
-    x.fixValue()
-
 
 def itertools_generator(n_colors, codelength):
     for i in itertools.product(range(n_colors), repeat=codelength):
         yield np.array(i)
-
-
 
 def is_compatible(candidate, guess, guess_output):
     return guess_output == evaluate_guess(candidate, guess, verbose=False)
