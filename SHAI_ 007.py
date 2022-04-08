@@ -2,7 +2,7 @@ from itertools import chain
 import numpy as np
 from Alice import evaluate_guess
 
-from utils import is_compatible_with_history as is_compatible, lpMin
+from utils import fix_value, is_compatible_with_history as is_compatible, lpMin
 from utils import get_guess, blacks, whites, col, row
 
 import pulp
@@ -194,7 +194,10 @@ class Player():
             problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
             for v in Vals:
                 if v not in self.cells[i].possible_values:
-                    problem += X[i][v] == 0, f"Remove discarded value {v} from cell {i}"
+                    fix_value(X[i][v], 0)
+            if not self.cells[i].unconfirmed():
+                v = self.cells[i].possible_values[0]
+                fix_value(X[i][v], 1)
         
         for episode, event in enumerate(history):
             # Build the guess matrix with indicator vectors as rows
@@ -226,7 +229,10 @@ class Player():
         if warm_start:
             for c in Cells:
                 for v in Vals:
-                    X[c][v].setInitialValue(G[c][v])
+                    try:
+                        X[c][v].setInitialValue(G[c][v])
+                    except:
+                        X[c][v].setInitialValue(1-G[c][v])
 
         # solver = pulp.GUROBI_CMD(msg=0)
         solver=pulp.PULP_CBC_CMD(msg=0, warmStart=True, presolve=True)
@@ -237,10 +243,9 @@ class Player():
                 if pulp.value(X[i][v]) == 1:
                     solution[i] = v
         compatible = is_compatible(solution, history)
-        if self.verbose:
-            print('status', pulp.LpStatus[problem.status])
         if not compatible:  
-            print('no bueno')
+            if self.verbose:
+                print('status', pulp.LpStatus[problem.status])
         else:
             return solution
 
@@ -303,27 +308,26 @@ class Player():
 
 if __name__ == "__main__":
     from Alice import Alice
-    n_colors = 5
-    codelength = 8
-    verbose = True
+    n_colors = 72
+    codelength = 15
     for i in range(1000):
         seed=np.random.randint(0, 2**31)
-        seed=1325043143
+        # seed=1325043143
         # print(seed)
         alice = Alice(n_colors=n_colors,
             codelength=codelength,
             seed=seed,
-            verbose=verbose)
+            verbose=False)
         player = Player(
             {'codelength':codelength, 'n_colors':n_colors}, 
             seed=1,
             # seed=np.random.randint(0, 2**31),
-            verbose=True
+            verbose=False
         )
         while True:  # main game loop. loop till break because of won or lost game
             guess = player.make_a_guess(alice.history, None)
             alice_answer = alice(guess)
-            # print('move nº', len(alice.history), 'info', player.information(), 'bits')
+            print(alice_answer, 'move nº', len(alice.history), 'info', round(player.information(), 2), 'bits')
             if alice_answer == "GAME WON":
                 break
         score = len(alice.history)
