@@ -167,7 +167,7 @@ class Player():
                             self.not_white_nor_black(slot, event)
         # if self.verbose:
         #     print('reanalize the past at', history[:-1][-1])
-        # self.analyze(history[:-1])
+        self.analyze(history[:-1])
 
     def set_current(self, values):
         assert len(values) == self.codelength
@@ -285,22 +285,25 @@ class Player():
 
     # this method will be called by the Referee. have fun putting AI here:
     def make_a_guess(self, history, remaining_time_in_sec):
-        if self.verbose:
-            print(f"PLAYER: Remaining_time= {remaining_time_in_sec}")
+        # if self.verbose:
+        #     print(f"PLAYER: Remaining_time= {remaining_time_in_sec}")
 
         self.analyze(history)
 
         guess = None
 
-        # if not len(history):
-        #     guess = self.best_opener      
+        if not len(history):
+            guess = self.best_opener      
         # if guess is None:
         #     if len(history) < 15:
         #         guess = self.random_compatible_guess(history, max_tries=10000)
         if guess is None:
-            guess = self.linear_programming_compatible_guess(history)
-        # if guess is None:
-        #     guess = self.prioritized_guess(history)
+            if self.information() < 50 or len(history) < 10:
+                print('linear programming')
+                guess = self.linear_programming_compatible_guess(history)
+        if guess is None:
+            print('deductive guess')
+            guess = self.prioritized_guess(history)
         
         self.set_current(guess)
         return self.current()
@@ -309,7 +312,7 @@ class Player():
 if __name__ == "__main__":
     from Alice import Alice
     n_colors = 72
-    codelength = 15
+    codelength = 45
     for i in range(1000):
         seed=np.random.randint(0, 2**31)
         # seed=1325043143
