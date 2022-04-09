@@ -133,6 +133,13 @@ class Player():
             if all(get_guess(last) == get_guess(last)[0]):
                 v = get_guess(last)[0]
                 self.value_counts[v] = blacks(last) + whites(last)
+            # Discard one-count-values in ohter cells after confirming in one
+            for v, count in self.value_counts.items():
+                confirmed_cells = [c for c in self.cells if c.possible_values == [v]]
+                if count == len(confirmed_cells) > 0:
+                    for c in self.cells:
+                         if c not in confirmed_cells:
+                             c.discard(v)
 
         if len(history) < 2:
             return
@@ -258,11 +265,10 @@ class Player():
         for cell in prioritized_cells:
             current_value = cell.current()
             # Values possible in fewer cells allow discarding via white
-            # But for now we prioritize not currently appearing in other cells
             prioritized_values = sorted(
                 [v for v in cell.possible_values if v != current_value],
-                # key = lambda v:  len([c for c in self.cells if v in c.possible_values])
-                key = lambda v:  len([c for c in prioritized_cells if v == c.current()])
+                key = lambda v:  len([c for c in self.cells if v in c.possible_values])
+                # key = lambda v:  len([c for c in prioritized_cells if v == c.current()])
             )
             for value in prioritized_values:
                 cell.set(value)
@@ -331,7 +337,7 @@ if __name__ == "__main__":
             {'codelength':codelength, 'n_colors':n_colors}, 
             seed=1,
             # seed=np.random.randint(0, 2**31),
-            verbose=False
+            verbose=True
         )
         print('secret', alice.secret, 'info', round(codelength*np.log2(n_colors),1))
         while True:  # main game loop. loop till break because of won or lost game
