@@ -212,9 +212,6 @@ class Player():
         for i in Cells:
             problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
         
-        for v, counts in self.value_counts.items():
-            problem += pulp.lpSum(col(X, v)) == counts, f"Value count {v} == {counts}"
-        
         for episode, event in enumerate(history):
             # Build the guess matrix with indicator vectors as rows
             G = np.zeros((self.codelength, self.n_colors))
@@ -233,7 +230,7 @@ class Player():
                         X[c][v].setInitialValue(G[c][v])
         
         try:
-            solver = pulp.GUROBI(msg=0, warmStart=True)
+            solver = pulp.GUROBI(msg=0, warmStart=True, timeLimit=15)
             problem.solve(solver=solver)
         except Exception as e:
             if self.verbose:
@@ -311,7 +308,7 @@ class Player():
         if guess is None:
             if self.verbose:
                 print('linear programming')
-            guess = self.linear_programming_compatible_guess(history[self.n_colors:])
+            guess = self.linear_programming_compatible_guess(history)
         if guess is None:
             if self.verbose:
                 print('deductive guess')
