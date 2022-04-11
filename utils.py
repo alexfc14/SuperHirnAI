@@ -36,7 +36,6 @@ def lpMin(problem, x, x1, x2, name_suffix, M=10**10):
     problem += x >= x1 - M*(1-y)
     problem += x >= x2 - M*(y)
 
-
 def itertools_generator(n_colors, codelength):
     for i in itertools.product(range(n_colors), repeat=codelength):
         yield np.array(i)
@@ -85,6 +84,31 @@ def get_entropy_gain(guess, n_colors, codelength):
         information_gain = prior_information - posterior_information
         entropy += secret_probability * information_gain
     return entropy
+
+def expected_survivors(guess, pool):
+    codes_by_output = {}
+    for secret in pool:
+        output = evaluate_guess(secret, guess, verbose=False)
+        if output not in codes_by_output:
+            codes_by_output[output] = 1            
+        else:
+            codes_by_output[output] += 1
+    # compute expected value: sum_outputs (prob*count), prob = count/total
+    N = len(pool)
+    weighed_mean_codes = sum([count/N*count for count in codes_by_output.values()])
+    return weighed_mean_codes
+
+def find_best_guess(pool):
+    min_surivors = len(pool)
+    best_guess = None
+
+    for i, guess in enumerate(pool):
+        guess_survivors = expected_survivors(guess, pool)
+        if guess_survivors < min_surivors:
+            min_surivors = guess_survivors
+            best_guess = guess
+    
+    return best_guess
 
 def is_representer(guess):
     if guess[0] != 0:
