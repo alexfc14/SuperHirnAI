@@ -1,3 +1,4 @@
+import time
 from collections import Counter
 import pulp
 import itertools
@@ -85,29 +86,40 @@ def get_entropy_gain(guess, n_colors, codelength):
         entropy += secret_probability * information_gain
     return entropy
 
-def expected_survivors(guess, pool):
+def expected_survival_rate(guess, pool):
     codes_by_output = {}
-    for secret in pool:
+    for i, secret in enumerate(pool):
         output = evaluate_guess(secret, guess, verbose=False)
         if output not in codes_by_output:
             codes_by_output[output] = 1            
         else:
             codes_by_output[output] += 1
-    # compute expected value: sum_outputs (prob*count), prob = count/total
-    N = len(pool)
-    weighed_mean_codes = sum([count/N*count for count in codes_by_output.values()])
-    return weighed_mean_codes
+    N = i + 1
+    # compute expected value: sum_outputs (prob*x), prob = count/total, x=count/total
+    weighed_mean_rate = sum([count/N*count/N for count in codes_by_output.values()])
+    return weighed_mean_rate
 
-def find_best_guess(pool):
-    min_surivors = len(pool)
+def find_best_guess(openers, pool, time_limit=600, verbose=False):
+    timeout = time.time() + time_limit
+    min_rate = np.inf
     best_guess = None
 
-    for i, guess in enumerate(pool):
-        guess_survivors = expected_survivors(guess, pool)
-        if guess_survivors < min_surivors:
-            min_surivors = guess_survivors
+    for i, guess in enumerate(openers):
+        if time.time() > timeout:
+            if verbose:
+                print('reached time limit', time_limit, 'seconds')
+            break
+        rate = expected_survival_rate(guess, pool)
+        if rate < min_rate:
+            min_rate = rate
             best_guess = guess
-    
+            if verbose:
+                print('new optimal', rate, guess, 'after', time.time()-(timeout-time_limit))
+        else:
+            if verbose == 2:
+                print('not optimal', rate, guess)
+    if verbose:
+        print('explored', i+1, 'solutions:', min_rate, 'survivors')
     return best_guess
 
 def is_representer(guess):
@@ -127,24 +139,53 @@ def is_representer(guess):
     
     return True
 
-if __name__ == "__main__":
-    n_colors = 10
-    codelength = 8
+def representer_generator(n_colors, codelength):
+    finish = np.arange(codelength)
+    openers = itertools_generator(n_colors, codelength)
+    for guess in openers:
+        if is_representer(guess):
+            yield guess
+        if all(guess == finish):
+            break
 
+def random_code_generator(size, n_colors, codelength):
+    for i in range(size):
+        yield np.array([np.random.randint(n_colors) for i in range(codelength)])
+
+def timeout(generator, time_limit, verbose=False):
+    timeout = time.time() + time_limit
+    for i, x in enumerate(generator):
+        if time.time() > timeout:
+            if verbose:
+                print('reached time limit', time_limit, 'seconds', 'at item nº', i, ':', x)
+            break
+        yield x
+
+def get_best_opener(n_colors, codelength):
+    best_openers = {
+        (8, 5): np.array([0, 0, 1, 2, 3])
+    }
+    default = np.arange(codelength)//2
+    return best_openers.get((n_colors, codelength), default)
+
+if __name__ == "__main__":
+
+    n_colors = 8
+    codelength = 5
+    for experiment in range(10):
+        openers = representer_generator(n_colors, codelength)
+        pool = list(random_code_generator(500, n_colors, codelength))
+        best_opener = find_best_guess(openers, pool, time_limit=6*3600, verbose=0)
+        print('best guess', best_opener, 'rate', round(expected_survival_rate(best_opener, pool),3))
+
+
+    n_colors = 8
+    codelength = 5
+    
     max_entropy = 0
     best_guess = None
-
-    # openers = [
-    #     np.array((0, 1, 2, 3, 4)),
-    #     np.array((0, 0, 1, 2, 3)),
-    #     np.array((0, 0, 1, 1, 2)),
-    #     np.array((0, 0, 0, 1, 2)),
-    #     np.array((0, 0, 0, 1, 1)),
-    #     np.array((0, 0, 0, 0, 1)),
-    #     np.array((0, 0, 0, 0, 0))
-    # ]
-    openers = itertools_generator(n_colors, codelength)
-
+    
+    openers = representer_generator(n_colors, codelength)
     for guess in openers:
         if not is_representer(guess):
             continue
@@ -157,3 +198,63 @@ if __name__ == "__main__":
 
     print('best opener for a code of', n_colors, 'colors', 'and length',
         codelength,  'is', best_guess, 'with entropy', max_entropy)
+
+
+    n_colors = 16
+    codelength = 10
+
+    openers = [
+        np.array((0, 1, 2, 3, 4, 5, 6, 7, 8, 9)),
+
+        np.array((0, 0, 1, 2, 3, 4, 5, 6, 7, 8)),
+
+        np.array((0, 0, 1, 1, 2, 3, 4, 5, 6, 7)),
+        np.array((0, 0, 0, 1, 2, 3, 4, 5, 6, 7)),
+
+        np.array((0, 0, 1, 1, 2, 2, 3, 4, 5, 6)),
+        np.array((0, 0, 0, 1, 2, 2, 3, 4, 5, 6)),
+        np.array((0, 0, 0, 1, 1, 2, 3, 4, 5, 6)),
+        np.array((0, 0, 0, 0, 1, 2, 3, 4, 5, 6)),
+
+        np.array((0, 0, 0, 0, 0, 1, 2, 3, 4, 5)),
+        np.array((0, 0, 0, 0, 1, 1, 2, 3, 4, 5)),
+        np.array((0, 0, 0, 1, 1, 1, 2, 3, 4, 5)),
+        np.array((0, 0, 0, 1, 1, 2, 2, 3, 4, 5)),
+        np.array((0, 0, 1, 1, 2, 2, 3, 3, 4, 5)),
+        
+        np.array((0, 0, 0, 0, 0, 0, 1, 2, 3, 4)),
+        np.array((0, 0, 0, 0, 0, 1, 1, 2, 3, 4)),
+        np.array((0, 0, 0, 0, 1, 1, 1, 2, 3, 4)),
+        np.array((0, 0, 0, 0, 1, 1, 2, 2, 3, 4)),
+        np.array((0, 0, 0, 1, 1, 1, 2, 2, 3, 4)),
+        np.array((0, 0, 0, 1, 1, 1, 2, 2, 3, 4)),
+        np.array((0, 0, 1, 1, 2, 2, 3, 3, 4, 4)),
+
+        np.array((0, 0, 0, 0, 0, 0, 0, 1, 2, 3)),
+        np.array((0, 0, 0, 0, 0, 0, 1, 1, 2, 3)),
+        np.array((0, 0, 0, 0, 0, 1, 1, 2, 2, 3)),
+        np.array((0, 0, 0, 0, 1, 1, 2, 2, 3, 3)),
+        np.array((0, 0, 0, 1, 1, 1, 2, 2, 3, 3)),
+        np.array((0, 0, 0, 1, 1, 1, 2, 2, 2, 3)),
+        np.array((0, 0, 0, 0, 1, 1, 1, 1, 2, 3)),
+
+        np.array((0, 0, 0, 0, 0, 0, 1, 1, 2, 2)),
+        np.array((0, 0, 0, 0, 0, 1, 1, 1, 2, 2)),
+        np.array((0, 0, 0, 0, 1, 1, 1, 2, 2, 2)),
+        np.array((0, 0, 0, 0, 0, 0, 0, 1, 1, 2)),
+        np.array((0, 0, 0, 0, 0, 0, 0, 0, 1, 2)),
+        np.array((0, 0, 0, 0, 0, 0, 0, 0, 1, 1)),
+        np.array((0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+        np.array((0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+    ]
+    pool = list(random_code_generator(2*10**5, n_colors, codelength))
+    best_opener = find_best_guess(openers, pool, time_limit=6*3600, verbose=True)
+    print('best guess', best_opener)
+
+    n_colors = 13
+    codelength = 8
+
+    openers = representer_generator(n_colors, codelength)
+    pool = list(random_code_generator(10**5, n_colors, codelength))
+    best_opener = find_best_guess(openers, pool, time_limit=6*3600, verbose=True)
+    print('best guess', best_opener)

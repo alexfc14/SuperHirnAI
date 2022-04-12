@@ -1,6 +1,6 @@
 import numpy as np
 
-from utils import find_best_guess, is_compatible_with_history as is_compatible, lpMin
+from utils import find_best_guess, get_best_opener, is_compatible_with_history as is_compatible, lpMin
 from utils import get_guess, blacks, whites, col, row, find_best_guess
 
 import pulp
@@ -67,9 +67,10 @@ class Player():
 
         # self.best_opener = np.array([0, 0, 1, 2, 3])
         # self.best_opener = self.rng.integers(0, self.n_colors, size=self.codelength)
-        self.best_opener = np.arange(self.codelength)
+        self.best_opener = get_best_opener(self.n_colors, self.codelength)
         self.slot = self.codelength - 1
-        self.cells = [Cell(n_colors, p, self.verbose) for p in range(codelength)]
+        self.cells = [Cell(self.n_colors, p, self.verbose) for p in range(self.codelength)]
+
 
         self.value_counts = {}
     
@@ -248,17 +249,16 @@ class Player():
                     if type(X[c][v]) == pulp.LpVariable:
                         X[c][v].setInitialValue(G[c][v])
         
-        solver = pulp.GUROBI(msg=0, warmStart=True)
-        problem.solve(solver=solver)
-
-        MAX_SOLS = 500
-        solver = pulp.GUROBI(msg=self.verbose, warmStart=True, PoolSolutions=MAX_SOLS, PoolSearchMode=2, timeLimit=5)
+        # solver = pulp.GUROBI(msg=0, warmStart=True)
+        # problem.solve(solver=solver)
+        MAX_SOLS = 1000
+        solver = pulp.GUROBI(msg=0, warmStart=True, PoolSolutions=MAX_SOLS, PoolSearchMode=2, timeLimit=5)
         problem.solve(solver=solver)
 
         model = problem.solverModel
         if self.verbose:
             print(model.SolCount, 'solutions found')
-        solution_pool = []
+        pool = set()
         for solution_number in range(model.SolCount):
             # Iterate through feasible solutions
             model.setParam('SolutionNumber', solution_number)
@@ -274,14 +274,23 @@ class Player():
                         solution[c] = v
             compatible = is_compatible(solution, history)
             if not compatible:
-                if self.verbose:
-                    print('incorrect solution from GUROBI pool!', solution)
+                # if self.verbose:
+                #     print('incorrect solution from GUROBI!', solution)
                 continue
-            
-            solution_pool.append(solution)
-
+            solution = tuple(solution)
+            if solution in pool:
+                # if self.verbose:
+                #     print('duplicate solution from GUROBI!', solution)
+                continue
+            pool.add(solution)
+        if self.verbose:
+            print(len(pool), 'clean solutions')
         # Choose best solution
-        solution = find_best_guess(solution_pool)
+        pool = [np.array(x) for x in pool]
+        if len(pool) == 1:
+            if self.verbose:
+                print('only 1 solution found')
+        solution = find_best_guess(pool, pool, 1.5, self.verbose)
         
         compatible = is_compatible(solution, history)
         if not compatible:
@@ -312,12 +321,12 @@ class Player():
 
 if __name__ == "__main__":
     from Alice import Alice
-    n_colors = 16
-    codelength = 10
-    for i in range(1):
+    n_colors = 8
+    codelength = 5
+    for i in range(100):
         seed=np.random.randint(0, 2**31)
         # seed=1325043143
-        # print(seed)
+        print('seed', seed)
         alice = Alice(n_colors=n_colors,
             codelength=codelength,
             seed=seed,

@@ -2,7 +2,7 @@
 pars:
     db_filepath: results.sqlite
     n_games_in_parallel: 3 # to guarantee that time controll is acurate, do not use more than half the number of available cpu's.
-    verbose: True         # If True, output of players and alice also shown
+    verbose: False         # If True, output of players and alice also shown
 
 # Gamemodi. Do not alter the numbers of small, medium, large, universal. You can add new modi if you like. Just give them a new names
 gamemodi:
@@ -42,15 +42,30 @@ gamemodi:
 tournament_sections:
     - title: starting_small
       gamemodus: small
-      players: [SHAI_cells]
-      n_games: 100 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
+      players: [medium_002]
+      n_games: 300 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
       salt: non-deterministic # use another string (different from 'non-deterministic') to get a deterministic run. At competition day, we will do that for reproducibility of the results.
 
     # a tournament can contain many tournament sections. They will be played in listed order. 
     - title: medium_complexity
       gamemodus: medium
-      players: [SHAI_best_opener_random] # not all three players participating now
-      n_games: 0
+      players: [medium_002] # not all three players participating now
+      n_games: 300
       salt: non-deterministic
 
+    # a tournament can contain many tournament sections. They will be played in listed order. 
+    - title: large_complexity
+      gamemodus: large
+      players: [medium_002] # not all three players participating now
+      n_games: 300
+      salt: non-deterministic
+    
+    # a tournament can contain many tournament sections. They will be played in listed order. 
+    # - title: universal_complexity
+    #   gamemodus: universal
+    #   players: [universal] # not all three players participating now
+    #   n_games: 300
+    #   salt: non-deterministic
+
+    # more section to be added...
     # more section to be added...

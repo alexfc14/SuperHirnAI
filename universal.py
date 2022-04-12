@@ -65,9 +65,9 @@ class Player():
             print("PLAYER: Init player heuristics")
 
         # self.best_opener = np.array([0, 0, 1, 1, 2])
-        self.best_opener = self.rng.integers(0, self.n_colors, size=self.codelength)
+        # self.best_opener = self.rng.integers(0, self.n_colors, size=self.codelength)
         self.slot = self.codelength - 1
-        self.cells = [Cell(n_colors, p, self.verbose) for p in range(codelength)]
+        self.cells = [Cell(self.n_colors, p, self.verbose) for p in range(self.codelength)]
 
         self.value_counts = {}
     
