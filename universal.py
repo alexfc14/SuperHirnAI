@@ -1,9 +1,10 @@
 import numpy as np
 
-from utils import is_compatible_with_history as is_compatible
+from utils import find_best_guess, is_compatible_with_history as is_compatible
 from utils import get_guess, blacks, whites, col, row
 
 import pulp
+import gurobipy
 
 class Cell:
     def __init__(self, n_colors, position=None, verbose=True):
@@ -104,8 +105,10 @@ class Player():
         self.cells[slot].confirm(value)
 
     def analyze(self, history):
+        prior_information = self.information()
+
         if len(history) == 0:
-            return
+            return        
         elif len(history) >= 1:
             last = history[-1]
             if blacks(last) == 0:
@@ -133,6 +136,13 @@ class Player():
             if all(get_guess(last) == get_guess(last)[0]):
                 v = get_guess(last)[0]
                 self.value_counts[v] = blacks(last) + whites(last)
+            # Avoid redundant guess of last color, make a special case
+            v = self.n_colors - 1
+            if len(history) == v and v not in self.value_counts and len(self.value_counts) == v:
+                self.value_counts[v] = self.codelength - sum(self.value_counts.values())
+                if self.value_counts[v] == 0:
+                    for cell in self.cells:
+                        cell.discard(v)
             # Discard one-count-values in ohter cells after confirming in one
             for v, count in self.value_counts.items():
                 confirmed_cells = [c for c in self.cells if c.possible_values == [v]]
@@ -141,45 +151,69 @@ class Player():
                          if c not in confirmed_cells:
                              c.discard(v)
 
-        if len(history) < 2:
-            return
-        
-        last = history[-1]
-        past = history[-2]
+        if len(history) >= 2:
+            last = history[-1]
+            past = history[-2]
 
-        diff = (get_guess(last) != get_guess(past))
-        slot = diff.tolist().index(True)
-        if sum(diff) == 1:
-            if blacks(last) != blacks(past):
-                # Confirm the one with highest blacks
-                if blacks(last) > blacks(past):
-                    self.black(slot, last)
+            diff = (get_guess(last) != get_guess(past))
+            slot = diff.tolist().index(True)
+            if sum(diff) == 1:
+                if blacks(last) != blacks(past):
+                    # Confirm the one with highest blacks
+                    if blacks(last) > blacks(past):
+                        self.black(slot, last)
+                    else:
+                        self.black(slot, past)
                 else:
-                    self.black(slot, past)
-            else:
-                # Discard both
-                for event in (last, past):
-                    self.not_black(slot, event)
-            
-            if whites(last) == whites(past) and whites(last) == 0:
-                if (blacks(last) == blacks(past)):
+                    # Discard both
                     for event in (last, past):
-                        self.not_white_nor_black(slot, event)
-                elif blacks(last) < blacks(past):
-                    self.not_white_nor_black(slot, last)
-            elif whites(last) < whites(past) and blacks(last) == blacks(past):
-                self.not_white_nor_black(slot, last)
-            for event in history[:-1][::-1]:
-                # Go back through all prev guesses of this cell that didn't contribute to white
-                if whites(last) > whites(event) and blacks(last) == blacks(event):
-                    diff = get_guess(last) != get_guess(event)
-                    if sum(diff) == 1:
-                        diff_slot = diff.tolist().index(True)
-                        if slot == diff_slot:
+                        self.not_black(slot, event)
+                
+                if whites(last) == whites(past) and whites(last) == 0:
+                    if (blacks(last) == blacks(past)):
+                        for event in (last, past):
                             self.not_white_nor_black(slot, event)
-        # if self.verbose:
-        #     print('reanalize the past at', history[:-1][-1])
-        self.analyze(history[:-1])
+                    elif blacks(last) < blacks(past):
+                        self.not_white_nor_black(slot, last)
+                elif whites(last) < whites(past) and blacks(last) == blacks(past):
+                    self.not_white_nor_black(slot, last)
+                for event in history[:-1][::-1]:
+                    # Go back through all prev guesses of this cell that didn't contribute to white
+                    if whites(last) > whites(event) and blacks(last) == blacks(event):
+                        diff = get_guess(last) != get_guess(event)
+                        if sum(diff) == 1:
+                            diff_slot = diff.tolist().index(True)
+                            if slot == diff_slot:
+                                self.not_white_nor_black(slot, event)
+            
+            do_lp_analysis = len(history) >= self.n_colors*1.33
+            if do_lp_analysis:
+                self.lp_analyze(history)
+
+            if self.information() < prior_information:
+                for i in range(len(history)):
+                    self.analyze(history[:-i])
+
+    def lp_analyze(self, history):
+        tail = 2
+        if len(history) > self.n_colors + tail:
+            Cells = range(self.codelength)
+            for c in Cells:
+                unique_values = len(set([get_guess(e)[c] for e in history[-tail:]]))
+                if unique_values > 1:
+                    continue
+                cell = self.cells[c]
+                if cell.unconfirmed():
+                    v = get_guess(history[-1])[c]
+                    if v in cell.possible_values:
+                        self.lp_confirm()(history, v, c)
+        tail = 2
+        if len(history) > self.n_colors + tail:
+            Cells = range(self.codelength)
+            for c in Cells:
+                cell = self.cells[c]
+                for v in cell.possible_values:
+                    self.lp_discard(history, v, c)
 
     def set_current(self, values):
         assert len(values) == self.codelength
@@ -229,27 +263,143 @@ class Player():
                     if type(X[c][v]) == pulp.LpVariable:
                         X[c][v].setInitialValue(G[c][v])
         
-        try:
-            solver = pulp.GUROBI(msg=0, warmStart=True, timeLimit=15)
-            problem.solve(solver=solver)
-        except Exception as e:
-            if self.verbose:
-                print('GUROBI failed, using CBC. Reason:', e.message)
-            solver=pulp.PULP_CBC_CMD(msg=0, warmStart=True, presolve=True, timeLimit=10)
-            problem.solve(solver=solver)
+        # try:
+        #     solver = pulp.GUROBI(msg=0, warmStart=True, timeLimit=15)
+        #     problem.solve(solver=solver)
+        # except Exception as e:
+        #     if self.verbose:
+        #         print('GUROBI failed, using CBC. Reason:', e.message)
+        #     solver=pulp.PULP_CBC_CMD(msg=0, warmStart=True, presolve=True, timeLimit=10)
+        #     problem.solve(solver=solver)
         
-        solution = np.zeros(self.codelength, dtype='int')
-        for i in Cells:
-            for v in Vals:
-                if pulp.value(X[i][v]) == 1:
-                    solution[i] = v
-        compatible = is_compatible(solution, history)
-        if not compatible:  
+        MAX_SOLS = 200
+        TEST_SURVIVE = 200
+        solver = pulp.GUROBI(msg=0, warmStart=True, PoolSolutions=MAX_SOLS, PoolSearchMode=2, gapRel=0, timeLimit=30)
+        problem.solve(solver=solver)
+
+        model = problem.solverModel
+        if self.verbose:
+            print(model.SolCount, 'solutions found')
+        pool = set()
+        for solution_number in range(model.SolCount):
+            # Iterate through feasible solutions
+            model.setParam('SolutionNumber', solution_number)
+            sol_vals = model.getAttr(gurobipy.GRB.Attr.Xn)
+
+            for var, val in zip(problem._variables, sol_vals):
+                var.varValue = val
+            
+            solution = np.zeros(self.codelength, dtype='int')
+            for c in Cells:
+                for v in Vals:
+                    if pulp.value(X[c][v]) == 1:
+                        solution[c] = v
+            compatible = is_compatible(solution, history)
+            if not compatible:
+                # if self.verbose:
+                #     print('incorrect solution from GUROBI!', solution)
+                continue
+            solution = tuple(solution)
+            if solution in pool:
+                # if self.verbose:
+                #     print('duplicate solution from GUROBI!', solution)
+                continue
+            pool.add(solution)
+        if self.verbose:
+            print(len(pool), 'clean solutions')
+        # Choose best solution
+        pool = [np.array(x) for x in pool]
+        if len(pool) == 0:
             if self.verbose:
+                print('no solutions found!')
                 print('status', pulp.LpStatus[problem.status])
         else:
+            solution = find_best_guess(pool, pool[:TEST_SURVIVE], 5, self.verbose)
             return solution
+    
+    def lp_discard(self, history, value, cell):
+        # Formulate the general problem
+        Cells = range(self.codelength)
+        Vals = range(self.n_colors)
 
+        problem = pulp.LpProblem("SuperHirn Problem", pulp.LpMaximize)
+        X = pulp.LpVariable.dicts(name="X", indices=(Cells, Vals), lowBound=0, upBound=1, cat=pulp.LpInteger)
+        for i in Cells:
+            for v in Vals:
+                if v not in self.cells[i].possible_values:
+                    X[i][v] = 0
+            if not self.cells[i].unconfirmed():
+                v = self.cells[i].possible_values[0]
+                X[i][v] = 1
+        
+        # Add constraint of cell having this value. If infeasible, discard value.
+        X[cell][value] = 1
+
+        for i in Cells:
+            problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
+        
+        for episode, event in enumerate(history):
+            # Build the guess matrix with indicator vectors as rows
+            G = np.zeros((self.codelength, self.n_colors))
+            for i, v in enumerate(get_guess(event)):
+                G[i, v] = 1
+            
+            # Black matches
+            problem += pulp.lpSum([pulp.lpDot(row(G, i), row(X, i)) for i in Cells]) == blacks(event), f"Blacks == {blacks(event)} at event {episode}: {event}"
+
+        solver = pulp.GUROBI(msg=0, warmStart=True, timeLimit=15)
+        problem.solve(solver=solver)
+
+        solution = np.zeros(self.codelength, dtype='int')
+        for c in Cells:
+            for v in Vals:
+                if pulp.value(X[c][v]) == 1:
+                    solution[c] = v
+        
+        if not is_compatible(solution, history):
+            self.cells[c].discard(value) 
+
+    def lp_confirm(self, history, value, cell):
+        # Formulate the general problem
+        Cells = range(self.codelength)
+        Vals = range(self.n_colors)
+
+        problem = pulp.LpProblem("SuperHirn Problem", pulp.LpMaximize)
+        X = pulp.LpVariable.dicts(name="X", indices=(Cells, Vals), lowBound=0, upBound=1, cat=pulp.LpInteger)
+        for i in Cells:
+            for v in Vals:
+                if v not in self.cells[i].possible_values:
+                    X[i][v] = 0
+            if not self.cells[i].unconfirmed():
+                v = self.cells[i].possible_values[0]
+                X[i][v] = 1
+        
+        # Add constraint of cell not having this value. If infeasible, confirm value.
+        X[cell][value] = 0
+
+        for i in Cells:
+            problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
+        
+        for episode, event in enumerate(history):
+            # Build the guess matrix with indicator vectors as rows
+            G = np.zeros((self.codelength, self.n_colors))
+            for i, v in enumerate(get_guess(event)):
+                G[i, v] = 1
+            
+            # Black matches
+            problem += pulp.lpSum([pulp.lpDot(row(G, i), row(X, i)) for i in Cells]) == blacks(event), f"Blacks == {blacks(event)} at event {episode}: {event}"
+
+        solver = pulp.GUROBI(msg=0, warmStart=True, timeLimit=15)
+        problem.solve(solver=solver)
+
+        solution = np.zeros(self.codelength, dtype='int')
+        for c in Cells:
+            for v in Vals:
+                if pulp.value(X[c][v]) == 1:
+                    solution[c] = v
+        
+        if not is_compatible(solution, history):
+            self.cells[c].confirm(value)
 
     def prioritized_guess(self, history):
         # Cells with fewer (>1) possible values offer more discarding % power
@@ -301,7 +451,7 @@ class Player():
         #     if len(history) < 15:
         #         guess = self.random_compatible_guess(history, max_tries=10000)
         if guess is None:
-            if len(history) < self.n_colors:
+            if len(history) < self.n_colors - 1:
                 if self.verbose:
                     print('constant', len(history))
                 guess = self.constant_guess(len(history))
@@ -323,8 +473,8 @@ if __name__ == "__main__":
     n_colors = 72
     codelength = 45
     for i in range(1):
-        seed=np.random.randint(0, 2**31)
-        # seed=1325043143
+        # seed=np.random.randint(0, 2**31)
+        seed=739163279
         # print(seed)
         alice = Alice(n_colors=n_colors,
             codelength=codelength,

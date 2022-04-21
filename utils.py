@@ -37,6 +37,7 @@ def lpMin(problem, x, x1, x2, name_suffix, M=10**10):
     problem += x >= x1 - M*(1-y)
     problem += x >= x2 - M*(y)
 
+
 def itertools_generator(n_colors, codelength):
     for i in itertools.product(range(n_colors), repeat=codelength):
         yield np.array(i)
@@ -113,7 +114,7 @@ def find_best_guess(openers, pool, time_limit=600, verbose=False):
         if rate < min_rate:
             min_rate = rate
             best_guess = guess
-            if verbose:
+            if verbose == 2:
                 print('new optimal', rate, guess, 'after', time.time()-(timeout-time_limit))
         else:
             if verbose == 2:
