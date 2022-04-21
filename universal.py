@@ -185,14 +185,10 @@ class Player():
                             diff_slot = diff.tolist().index(True)
                             if slot == diff_slot:
                                 self.not_white_nor_black(slot, event)
-            
-            do_lp_analysis = len(history) >= self.n_colors*1.33
-            if do_lp_analysis:
-                self.lp_analyze(history)
 
-            if self.information() < prior_information:
-                for i in range(len(history)):
-                    self.analyze(history[:-i])
+            while self.information() < prior_information:
+                self.analyze(history)
+                prior_information = self.information()
 
     def lp_analyze(self, history):
         tail = 2
@@ -313,6 +309,7 @@ class Player():
             if self.verbose:
                 print('no solutions found!')
                 print('status', pulp.LpStatus[problem.status])
+            self.lp_analyze(history)
         else:
             solution = find_best_guess(pool, pool[:TEST_SURVIVE], 5, self.verbose)
             return solution
