@@ -1,8 +1,8 @@
 import numpy as np
 from generator import Generator, generator
 
-from utils import find_best_guess, get_best_opener, is_compatible_with_history as is_compatible, itertools_generator, lpMin
-from utils import get_guess, blacks, whites, col, row, find_best_guess
+from utils_BB import find_best_guess, get_best_opener, is_compatible_with_history as is_compatible, itertools_generator, lpMin
+from utils_BB import get_guess, blacks, whites, col, row, find_best_guess
 
 class Player():
 

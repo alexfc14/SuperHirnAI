@@ -2,8 +2,8 @@ from itertools import chain
 import numpy as np
 from Alice import evaluate_guess
 
-from utils import is_compatible_with_history as is_compatible, lpMin
-from utils import get_guess, blacks, whites, col, row
+from utils_BB import is_compatible_with_history as is_compatible, lpMin
+from utils_BB import get_guess, blacks, whites, col, row
 
 import pulp
 
@@ -69,7 +69,7 @@ class Player():
         # self.best_opener = np.array([0, 0, 1, 1, 2])
         self.best_opener = self.rng.integers(0, self.n_colors, size=self.codelength)
         self.slot = self.codelength - 1
-        self.cells = [Cell(n_colors, p, self.verbose) for p in range(codelength)]
+        self.cells = [Cell(self.n_colors, p, self.verbose) for p in range(self.codelength)]
     
     def current(self):
         return np.array([cell.current() for cell in self.cells])
@@ -310,10 +310,10 @@ class Player():
         #         guess = np.repeat(len(history), self.codelength)
         #         print('constant', len(history))
         if guess is None:
-            print('linear programming')
+            # print('linear programming')
             guess = self.linear_programming_compatible_guess(history)
         if guess is None:
-            print('deductive guess')
+            # print('deductive guess')
             guess = self.prioritized_guess(history)
 
         self.set_current(guess)

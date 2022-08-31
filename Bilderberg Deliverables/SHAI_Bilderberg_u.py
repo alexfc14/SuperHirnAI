@@ -1,8 +1,7 @@
 import numpy as np
-from sympy import re
 
-from utils import find_best_guess, is_compatible_with_history as is_compatible
-from utils import get_guess, blacks, whites, col, row
+from utils_BB import find_best_guess, is_compatible_with_history as is_compatible
+from utils_BB import get_guess, blacks, whites, col, row
 
 import pulp
 import gurobipy
@@ -12,10 +11,21 @@ class Cell:
         self.n_colors = n_colors
         self.position = position
         self.possible_values = list(range(n_colors))
+        self.index = 0
         self.verbose = verbose
     
     def current(self):
-        return self.value
+        return self.possible_values[self.index]
+    
+    def adjust_index(self):
+        if self.index >= len(self.possible_values):
+            self.index = 0
+            return True
+        return False
+    
+    def next(self):
+        self.index += 1
+        return self.adjust_index()
     
     def discard(self, value):
         if value in self.possible_values:
@@ -23,19 +33,23 @@ class Cell:
                 print('discard', value, 'at', self.position)
             # decrease the index if we deleted a value below current
             assert len(self.possible_values) > 1
+            discard_index = self.possible_values.index(value)
+            if discard_index <= self.index:
+                self.index -= 1
             self.possible_values.remove(value)
     
     def set(self, value):
-        self.value = value
+        self.index = self.possible_values.index(value)
     
     def confirm(self, value):
         if self.unconfirmed():
             if self.verbose:
                 print('confirm', value, 'at', self.position)
-        elif self.possible_values[0] != value:
-            print('Beware, confirming different value!')
+        elif self.current() != value:
+            print('what??')
 
         self.possible_values = [value]
+        self.index = 0
     
     def unconfirmed(self):
         return len(self.possible_values) > 1
@@ -66,9 +80,6 @@ class Player():
             if cell.unconfirmed():
                 yield cell
     
-    def discarded(self):
-        return [value for value, count in self.value_counts.items() if count == 0]
-
     def information(self):
         return sum([np.log2(len(c.possible_values)) for c in self.cells])
     
@@ -121,22 +132,6 @@ class Player():
                 for value in absent:
                     for cell in self.cells:
                         cell.discard(value)
-            # Bisection guess case: blacks are confined to a subset of cells
-            # If whites == 0 , discard that from the rest
-            # If blacks == 0, discard that from them
-            n_half = self.codelength//2
-            left = get_guess(last)[:n_half]
-            right = get_guess(last)[n_half:]
-            if left[0] != right[0] and self.value_counts[left[0]] == 0 and all(left == left[0]) and all(right == right[0]):
-                v = right[0]
-                self.value_counts[v] = blacks(last) + whites(last)
-                if whites(last) == 0:
-                    for c in range(n_half):
-                        self.cells[c].discard(v)
-                if blacks(last) == 0:
-                    for c in range(n_half, self.codelength):
-                        self.cells[c].discard(v)
-
             # Constant guess tells us how many occurrences a value has
             if all(get_guess(last) == get_guess(last)[0]):
                 v = get_guess(last)[0]
@@ -195,10 +190,41 @@ class Player():
                 self.analyze(history)
                 prior_information = self.information()
 
+    def lp_analyze(self, history):
+        tail = 2
+        if len(history) > self.n_colors + tail:
+            Cells = range(self.codelength)
+            for c in Cells:
+                unique_values = len(set([get_guess(e)[c] for e in history[-tail:]]))
+                if unique_values > 1:
+                    continue
+                cell = self.cells[c]
+                if cell.unconfirmed():
+                    v = get_guess(history[-1])[c]
+                    if v in cell.possible_values:
+                        self.lp_confirm()(history, v, c)
+        tail = 2
+        if len(history) > self.n_colors + tail:
+            Cells = range(self.codelength)
+            for c in Cells:
+                cell = self.cells[c]
+                for v in cell.possible_values:
+                    self.lp_discard(history, v, c)
+
     def set_current(self, values):
         assert len(values) == self.codelength
         for cell, value in zip(self.cells, values):
             cell.set(value)
+
+    def random_compatible_guess(self, history, max_tries=100):
+        for i in range(max_tries):
+            guess = np.array([
+                c.possible_values[self.rng.integers(0, len(c.possible_values))]
+                for c in self.cells])
+            if is_compatible(guess, history):
+                if self.verbose:
+                    print('found compatible random guess')
+                return guess
 
     def linear_programming_compatible_guess(self, history):
         Cells = range(self.codelength)
@@ -215,9 +241,6 @@ class Player():
                 X[i][v] = 1
         for i in Cells:
             problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
-        
-        for v, counts in self.value_counts.items():
-            problem += pulp.lpSum(col(X, v)) == counts, f"Value count {v} == {counts}"
         
         for episode, event in enumerate(history):
             # Build the guess matrix with indicator vectors as rows
@@ -290,28 +313,7 @@ class Player():
         else:
             solution = find_best_guess(pool, pool[:TEST_SURVIVE], 5, self.verbose)
             return solution
-
-    def lp_analyze(self, history):
-        tail = 2
-        if len(history) > tail:
-            Cells = range(self.codelength)
-            for c in Cells:
-                unique_values = len(set([get_guess(e)[c] for e in history[-tail:]]))
-                if unique_values > 1:
-                    continue
-                cell = self.cells[c]
-                if cell.unconfirmed():
-                    v = get_guess(history[-1])[c]
-                    if v in cell.possible_values:
-                        self.lp_confirm(history, v, c)
-        tail = 2
-        if len(history) > tail:
-            Cells = range(self.codelength)
-            for c in Cells:
-                cell = self.cells[c]
-                for v in cell.possible_values:
-                    self.lp_discard(history, v, c)
-
+    
     def lp_discard(self, history, value, cell):
         # Formulate the general problem
         Cells = range(self.codelength)
@@ -333,9 +335,6 @@ class Player():
         for i in Cells:
             problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
         
-        for v, counts in self.value_counts.items():
-            problem += pulp.lpSum(col(X, v)) == counts, f"Value count {v} == {counts}"
-        
         for episode, event in enumerate(history):
             # Build the guess matrix with indicator vectors as rows
             G = np.zeros((self.codelength, self.n_colors))
@@ -355,7 +354,7 @@ class Player():
                     solution[c] = v
         
         if not is_compatible(solution, history):
-            self.cells[cell].discard(value) 
+            self.cells[c].discard(value) 
 
     def lp_confirm(self, history, value, cell):
         # Formulate the general problem
@@ -378,9 +377,6 @@ class Player():
         for i in Cells:
             problem += pulp.lpSum(row(X, i)) == 1, f"One value per cell {i}"
         
-        for v, counts in self.value_counts.items():
-            problem += pulp.lpSum(col(X, v)) == counts, f"Value count {v} == {counts}"
-        
         for episode, event in enumerate(history):
             # Build the guess matrix with indicator vectors as rows
             G = np.zeros((self.codelength, self.n_colors))
@@ -400,7 +396,7 @@ class Player():
                     solution[c] = v
         
         if not is_compatible(solution, history):
-            self.cells[cell].confirm(value)
+            self.cells[c].confirm(value)
 
     def prioritized_guess(self, history):
         # Cells with fewer (>1) possible values offer more discarding % power
@@ -436,14 +432,6 @@ class Player():
 
     def constant_guess(self, v):
         return np.repeat(v, self.codelength)
-    
-    def bisection_guess(self, v, impossible_value):
-        n_left = self.codelength//2
-        left = np.repeat(impossible_value, n_left)
-        n_right = self.codelength - n_left
-        right = np.repeat(v, n_right)
-        guess = np.concatenate((left, right))
-        return guess
 
     # this method will be called by the Referee. have fun putting AI here:
     def make_a_guess(self, history, remaining_time_in_sec):
@@ -460,20 +448,14 @@ class Player():
         #     if len(history) < 15:
         #         guess = self.random_compatible_guess(history, max_tries=10000)
         if guess is None:
-            if len(history) < self.n_colors:
-                impossible_values = list(self.discarded())
-                if len(impossible_values):
-                    if self.verbose:
-                        print('bisection', len(history))
-                    guess = self.bisection_guess(len(history), impossible_values[0])
-                else:
-                    if self.verbose:
-                        print('constant', len(history))
-                    guess = self.constant_guess(len(history))
+            if len(history) < self.n_colors - 1:
+                if self.verbose:
+                    print('constant', len(history))
+                guess = self.constant_guess(len(history))
         if guess is None:
             if self.verbose:
                 print('linear programming')
-            guess = self.linear_programming_compatible_guess(history[self.n_colors:])
+            guess = self.linear_programming_compatible_guess(history)
         if guess is None:
             if self.verbose:
                 print('deductive guess')
@@ -487,10 +469,10 @@ if __name__ == "__main__":
     from Alice import Alice
     n_colors = 72
     codelength = 45
-    for i in range(100):
+    for i in range(10):
         seed=np.random.randint(0, 2**31)
         # seed=739163279
-        print(seed)
+        # print(seed)
         alice = Alice(n_colors=n_colors,
             codelength=codelength,
             seed=seed,

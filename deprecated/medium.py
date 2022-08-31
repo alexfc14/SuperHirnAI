@@ -1,7 +1,7 @@
 import numpy as np
 
-from utils import find_best_guess, get_best_opener, is_compatible_with_history as is_compatible, lpMin
-from utils import get_guess, blacks, whites, col, row, find_best_guess
+from utils_BB import find_best_guess, get_best_opener, is_compatible_with_history as is_compatible, lpMin
+from utils_BB import get_guess, blacks, whites, col, row, find_best_guess
 
 import pulp
 import gurobipy
@@ -321,8 +321,8 @@ class Player():
 
 if __name__ == "__main__":
     from Alice import Alice
-    n_colors = 8
-    codelength = 5
+    n_colors = 16
+    codelength = 10
     for i in range(100):
         seed=np.random.randint(0, 2**31)
         # seed=1325043143

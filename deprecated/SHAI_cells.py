@@ -1,7 +1,7 @@
 import numpy as np
 from Alice import evaluate_guess
 
-from utils import is_compatible_with_history as is_compatible
+from utils_BB import is_compatible_with_history as is_compatible
 
 class Cell:
     def __init__(self, n_colors):
@@ -37,7 +37,7 @@ class Player():
         self.first_done = False
         self.best_opener = np.array([0, 0, 1, 1, 2])
         self.slot = self.codelength - 1
-        self.cells = [Cell(n_colors) for i in range(codelength)]
+        self.cells = [Cell(self.n_colors) for i in range(self.codelength)]
     
     def current(self):
         return np.array([cell.current() for cell in self.cells])

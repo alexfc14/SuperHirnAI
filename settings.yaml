@@ -40,27 +40,58 @@ gamemodi:
 
 # Tounament definition. Define who is playeing, which game modus, how many repetitions...
 tournament_sections:
-    - title: starting_small
-      gamemodus: small
-      players: [medium_002]
-      n_games: 300 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
-      salt: non-deterministic # use another string (different from 'non-deterministic') to get a deterministic run. At competition day, we will do that for reproducibility of the results.
-
-    # a tournament can contain many tournament sections. They will be played in listed order. 
-    - title: medium_complexity
-      gamemodus: medium
-      players: [medium_002] # not all three players participating now
-      n_games: 300
-      salt: non-deterministic
-
+    # - title: starting_small
+    #   gamemodus: small
+    #   players: [medium]
+    #   n_games: 300 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
+    #   salt: non-deterministic # use another string (different from 'non-deterministic') to get a deterministic run. At competition day, we will do that for reproducibility of the results.
+    
+    # - title: starting_small
+    #   gamemodus: small
+    #   players: [medium_range_opener]
+    #   n_games: 100 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
+    #   salt: non-deterministic # use another string (different from 'non-deterministic') to get a deterministic run. At competition day, we will do that for reproducibility of the results.
+    
+    # - title: starting_small
+    #   gamemodus: small
+    #   players: [medium_range2_opener]
+    #   n_games: 100 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
+    #   salt: non-deterministic # use another string (different from 'non-deterministic') to get a deterministic run. At competition day, we will do that for reproducibility of the results.
+    
+    # - title: medium_complexity
+    #   gamemodus: medium
+    #   players: [medium_range_opener]
+    #   n_games: 100 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
+    #   salt: non-deterministic # use another string (different from 'non-deterministic') to get a deterministic run. At competition day, we will do that for reproducibility of the results.
+    
+    # - title: medium_complexity
+    #   gamemodus: medium
+    #   players: [medium_range2_opener]
+    #   n_games: 100 # this number of games to be played per participating player. In total, 30*3=90 games will be played in this section 
+    #   salt: non-deterministic # use another string (different from 'non-deterministic') to get a deterministic run. At competition day, we will do that for reproducibility of the results.
+    
+    # # a tournament can contain many tournament sections. They will be played in listed order. 
+    # - title: large_complexity
+    #   gamemodus: large
+    #   players: [medium_range_opener] # not all three players participating now
+    #   n_games: 100
+    #   salt: non-deterministic
+    
     # a tournament can contain many tournament sections. They will be played in listed order. 
     - title: large_complexity
       gamemodus: large
-      players: [medium_002] # not all three players participating now
+      players: [medium_range2_opener] # not all three players participating now
       n_games: 300
       salt: non-deterministic
     
-    # a tournament can contain many tournament sections. They will be played in listed order. 
+    # # a tournament can contain many tournament sections. They will be played in listed order. 
+    # - title: universal_complexity
+    #   gamemodus: universal
+    #   players: [universal_bisection] # not all three players participating now
+    #   n_games: 30
+    #   salt: non-deterministic
+
+    # # a tournament can contain many tournament sections. They will be played in listed order. 
     # - title: universal_complexity
     #   gamemodus: universal
     #   players: [universal] # not all three players participating now

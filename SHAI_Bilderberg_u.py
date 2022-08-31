@@ -1,7 +1,7 @@
 import numpy as np
 
-from utils import find_best_guess, is_compatible_with_history as is_compatible
-from utils import get_guess, blacks, whites, col, row
+from utils_BB import find_best_guess, is_compatible_with_history as is_compatible
+from utils_BB import get_guess, blacks, whites, col, row
 
 import pulp
 import gurobipy
@@ -309,7 +309,7 @@ class Player():
             if self.verbose:
                 print('no solutions found!')
                 print('status', pulp.LpStatus[problem.status])
-            self.lp_analyze(history)
+            # self.lp_analyze(history)
         else:
             solution = find_best_guess(pool, pool[:TEST_SURVIVE], 5, self.verbose)
             return solution
@@ -469,9 +469,9 @@ if __name__ == "__main__":
     from Alice import Alice
     n_colors = 72
     codelength = 45
-    for i in range(1):
-        # seed=np.random.randint(0, 2**31)
-        seed=739163279
+    for i in range(10):
+        seed=np.random.randint(0, 2**31)
+        # seed=739163279
         # print(seed)
         alice = Alice(n_colors=n_colors,
             codelength=codelength,
